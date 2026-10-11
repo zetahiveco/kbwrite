@@ -5,6 +5,11 @@ use std::path::{Path, PathBuf};
 
 pub struct Vault {
     pub root: PathBuf,
+    /// Errors encountered while listing notes (e.g. permission denied by sandbox/TCC).
+    pub walk_errors: Vec<String>,
+    /// True when the OS blocked access to the notes folder (macOS TCC privacy
+    /// protection). Shown as an actionable "grant access" state in the UI.
+    pub permission_denied: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -15,25 +20,77 @@ pub struct NoteMeta {
     pub title: String,
 }
 
+/// A node in the vault's file tree (folder or `.md` note).
+#[derive(Debug, Clone)]
+pub struct TreeNode {
+    pub name: String,
+    /// Absolute path.
+    pub path: PathBuf,
+    pub is_dir: bool,
+    pub children: Vec<TreeNode>,
+}
+
 impl Vault {
     pub fn open(root: &Path) -> Result<Self> {
         std::fs::create_dir_all(root)?;
+        // Probe writability once so problems surface immediately.
+        let probe = root.join(".kbwrite-write-test");
+        let mut permission_denied = false;
+        match std::fs::write(&probe, b"ok")
+            .map(|_| std::fs::remove_file(&probe))
+        {
+            Ok(_) => {}
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    permission_denied = true;
+                }
+                eprintln!(
+                    "[kbwrite] WARNING: vault at {} is not writable: {e} \
+                     (If you launched via the Cursor terminal, the app may be sandboxed — \
+                     run from a regular terminal instead.)",
+                    root.display()
+                );
+            }
+        }
         Ok(Self {
             root: root.to_path_buf(),
+            walk_errors: Vec::new(),
+            permission_denied,
         })
     }
 
     /// Recursively list all `.md` notes in the vault.
-    pub fn list_notes(&self) -> Vec<NoteMeta> {
+    pub fn list_notes(&mut self) -> Vec<NoteMeta> {
         let mut notes = Vec::new();
-        self.walk(&self.root.clone(), &mut notes);
+        self.walk_errors.clear();
+        self.permission_denied = false;
+        let root = self.root.clone();
+        self.walk(&root, &mut notes);
         notes.sort_by(|a, b| a.rel.to_lowercase().cmp(&b.rel.to_lowercase()));
+        eprintln!(
+            "[kbwrite] vault {}: {} notes found{}",
+            self.root.display(),
+            notes.len(),
+            if self.walk_errors.is_empty() {
+                String::new()
+            } else {
+                format!(" (errors: {:?})", self.walk_errors)
+            }
+        );
         notes
     }
 
-    fn walk(&self, dir: &Path, notes: &mut Vec<NoteMeta>) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
+    fn walk(&mut self, dir: &Path, notes: &mut Vec<NoteMeta>) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    self.permission_denied = true;
+                }
+                self.walk_errors
+                    .push(format!("cannot read {}: {e}", dir.display()));
+                return;
+            }
         };
         for entry in entries.flatten() {
             let path = entry.path();
@@ -52,8 +109,9 @@ impl Vault {
                     .to_string();
                 let title = path
                     .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| name.to_string());
+                    .map(|s| s.to_string_lossy())
+                    .unwrap_or_else(|| name.to_owned())
+                    .to_string();
                 notes.push(NoteMeta { path, rel, title });
             }
         }
@@ -102,10 +160,97 @@ impl Vault {
         Ok(NoteMeta { path, rel, title })
     }
 
-    pub fn delete_note(&self, path: &Path) -> Result<()> {
+    /// Build the full file tree (folders + `.md` files, folders first).
+    pub fn tree(&mut self) -> Vec<TreeNode> {
+        let root = self.root.clone();
+        let mut nodes = Vec::new();
+        self.build_tree(&root, &root, &mut nodes);
+        nodes
+    }
+
+    fn build_tree(&mut self, dir: &Path, root: &Path, out: &mut Vec<TreeNode>) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    self.permission_denied = true;
+                }
+                self.walk_errors
+                    .push(format!("cannot read {}: {e}", dir.display()));
+                return;
+            }
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue; // hidden files / folders
+            }
+            if path.is_dir() {
+                let mut children = Vec::new();
+                self.build_tree(&path, root, &mut children);
+                out.push(TreeNode {
+                    name,
+                    path,
+                    is_dir: true,
+                    children,
+                });
+            } else if path.extension().map(|e| e == "md").unwrap_or(false) {
+                out.push(TreeNode {
+                    name,
+                    path,
+                    is_dir: false,
+                    children: Vec::new(),
+                });
+            }
+        }
+        // Folders first, then files, both alphabetically (case-insensitive).
+        out.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+    }
+
+    /// Create an empty file, failing if it already exists.
+    pub fn create_file(&self, path: &Path, content: &str) -> Result<()> {
+        if path.exists() {
+            return Err(anyhow!("“{}” already exists", path.display()));
+        }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        Ok(std::fs::write(path, content)?)
+    }
+
+    /// Create a folder (and any missing parents), failing if it already exists.
+    pub fn create_folder(&self, path: &Path) -> Result<()> {
+        if path.exists() {
+            return Err(anyhow!("“{}” already exists", path.display()));
+        }
+        Ok(std::fs::create_dir_all(path)?)
+    }
+
+    /// Rename/move a file or folder inside the vault, failing if the target exists.
+    pub fn rename_path(&self, from: &Path, to: &Path) -> Result<()> {
+        if !from.starts_with(&self.root) || !to.starts_with(&self.root) {
+            return Err(anyhow!("Refusing to operate outside of the vault"));
+        }
+        if to.exists() {
+            return Err(anyhow!("“{}” already exists", to.display()));
+        }
+        Ok(std::fs::rename(from, to)?)
+    }
+
+    /// Delete a file or folder (recursively) inside the vault.
+    pub fn delete_path(&self, path: &Path) -> Result<()> {
         if !path.starts_with(&self.root) {
             return Err(anyhow!("Refusing to delete outside of the vault"));
         }
-        Ok(std::fs::remove_file(path)?)
+        if path.is_dir() {
+            Ok(std::fs::remove_dir_all(path)?)
+        } else {
+            Ok(std::fs::remove_file(path)?)
+        }
     }
 }

@@ -17,6 +17,15 @@ pub struct Editor {
     pub last_focused: Option<u64>,
     /// Persisted rectangles for anchoring the slash popup.
     block_rects: std::collections::HashMap<u64, egui::Rect>,
+    /// Full row rects from the previous frame (drag-select hit testing).
+    row_rects: std::collections::HashMap<u64, egui::Rect>,
+    /// Blocks currently selected (Cmd/Ctrl+A or drag-select).
+    selected_blocks: HashSet<u64>,
+    /// Anchor y of an in-progress drag selection (None = not dragging).
+    select_drag: Option<f32>,
+    /// Gutter button rects from the previous frame (so a press on the
+    /// handle/plus button is not treated as the start of a drag-select).
+    gutter_btn_rects: Vec<egui::Rect>,
     /// Set while a slash-menu key was consumed this frame.
     ate_key: bool,
 }
@@ -36,6 +45,10 @@ impl Editor {
             hovered: HashSet::new(),
             last_focused: None,
             block_rects: std::collections::HashMap::new(),
+            row_rects: std::collections::HashMap::new(),
+            selected_blocks: HashSet::new(),
+            select_drag: None,
+            gutter_btn_rects: Vec::new(),
             ate_key: false,
         };
         ed.blocks.push(Block::new(ed.next_id, BlockKind::Paragraph));
@@ -49,6 +62,9 @@ impl Editor {
         self.focus_block = None;
         self.slash = None;
         self.last_focused = None;
+        self.selected_blocks.clear();
+        self.select_drag = None;
+        self.row_rects.clear();
     }
 
     pub fn to_markdown(&self) -> String {
@@ -100,6 +116,32 @@ impl Editor {
 
     pub fn show(&mut self, ui: &mut Ui, modified: &mut bool) {
         self.ate_key = false;
+        let cmd = |i: &egui::InputState| {
+            if cfg!(target_os = "macos") {
+                i.modifiers.command
+            } else {
+                i.modifiers.ctrl
+            }
+        };
+        let cmd_a = ui.input(|i| cmd(i) && i.key_pressed(Key::A));
+        let (primary_pressed, primary_down) = ui
+            .input(|i| (i.pointer.primary_pressed(), i.pointer.primary_down()));
+        let pointer_pos = ui.input(|i| i.pointer.latest_pos());
+        self.row_rects.clear();
+
+        // Start / clear multi-block selection on click.
+        if primary_pressed && pointer_pos.is_some() {
+            let pos = pointer_pos.unwrap();
+            let in_text = self.block_rects.values().any(|r| r.contains(pos));
+            let on_gutter_btn = self.gutter_btn_rects.iter().any(|r| r.contains(pos));
+            if in_text {
+                self.selected_blocks.clear();
+            } else if !on_gutter_btn && ui.clip_rect().min.x <= pos.x {
+                self.select_drag = Some(pos.y);
+                self.selected_blocks.clear();
+            }
+        }
+        self.gutter_btn_rects.clear();
 
         // Handle slash-menu keyboard navigation before widgets consume keys.
         if let Some(slash) = &self.slash {
@@ -137,6 +179,11 @@ impl Editor {
 
         let mut hovered_now = HashSet::new();
         let mut slash_open_request: Option<u64> = None;
+        let dark = ui.visuals().dark_mode;
+        let mut select_all_blocks = false;
+        // Deferred backspace merge (applied after the loop so `blocks` is
+        // never mutated while it is being iterated).
+        let mut pending_merge: Option<(u64, u64)> = None;
 
         // Precompute numbered-list indices.
         let mut numbered_index = 0usize;
@@ -151,40 +198,160 @@ impl Editor {
 
             let is_focused = self.focus_block == Some(block_id);
             let in_slash = self.slash.as_ref().map(|s| s.block_id) == Some(block_id);
+            let is_selected = self.selected_blocks.contains(&block_id);
 
-            ui.horizontal(|ui| {
+            let row_resp = ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 2.0;
 
                 // ----- Gutter: handle + add button (visible on hover) -----
                 let show_gutter = is_focused || in_slash || self.hovered.contains(&block_id);
-                let gutter_width = 34.0;
+                // Always reserve the exact same gutter rect whether or not the
+                // buttons are drawn, so the text never shifts when they appear.
+                // Layout: [2px] handle(22) [2px] plus(22) [24px prefix] → text.
+                //
+                // The icons are PAINTED (not egui Buttons) because interactive
+                // widgets have a minimum size of `interact_size` (40px wide),
+                // which made them overflow their slots and crowd the text.
+                // Layout: [2px] handle(22) [2px] plus(22) [2px] [24px prefix] → text.
+                let gutter_width = 48.0;
+                let (gutter_rect, gutter_resp) = ui
+                    .allocate_exact_size(Vec2::new(gutter_width, 20.0), Sense::hover());
+                if gutter_resp.hovered() {
+                    // Hovering the gutter strip keeps the buttons visible.
+                    hovered_now.insert(block_id);
+                }
                 if show_gutter {
-                    let handle = egui::Button::new(
-                        icon("dots-six-vertical")
-                            .size(14.0)
-                            .color(Color32::from_gray(120)),
-                    )
-                    .small();
-                    if ui
-                        .add_sized([17.0, 20.0], handle)
-                        .on_hover_text("Block actions")
-                        .clicked()
-                    {
+                    let handle_rect = egui::Rect::from_min_size(
+                        gutter_rect.left_top() + Vec2::new(2.0, 0.0),
+                        Vec2::new(22.0, 20.0),
+                    );
+                    let plus_rect = egui::Rect::from_min_size(
+                        gutter_rect.left_top() + Vec2::new(26.0, 0.0),
+                        Vec2::new(22.0, 20.0),
+                    );
+                    let icon_font =
+                        egui::FontId::new(14.0, egui::FontFamily::Name("phosphor-regular".into()));
+                    let icon_col = Color32::from_gray(120);
+                    let hover_bg = ui.visuals().widgets.hovered.bg_fill;
+
+                    let handle_resp = ui.interact(
+                        handle_rect,
+                        Id::new(("gutter_handle", block_id)),
+                        Sense::click(),
+                    );
+                    let plus_resp = ui.interact(
+                        plus_rect,
+                        Id::new(("gutter_plus", block_id)),
+                        Sense::click(),
+                    );
+
+                    // The click-sense widgets above sit on top of the outer
+                    // hover-sense gutter rect and block its hover when the
+                    // pointer is over a button — keep the buttons visible by
+                    // counting button hover too (prevents flicker).
+                    if handle_resp.hovered() || plus_resp.hovered() {
+                        hovered_now.insert(block_id);
+                    }
+                    self.gutter_btn_rects.push(handle_rect);
+                    self.gutter_btn_rects.push(plus_rect);
+
+                    if handle_resp.hovered() {
+                        ui.painter().rect_filled(handle_rect, 4.0, hover_bg);
+                    }
+                    if plus_resp.hovered() {
+                        ui.painter().rect_filled(plus_rect, 4.0, hover_bg);
+                    }
+                    ui.painter().text(
+                        handle_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        icon("dots-six-vertical").text().to_string(),
+                        icon_font.clone(),
+                        icon_col,
+                    );
+                    ui.painter().text(
+                        plus_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        icon("plus").text().to_string(),
+                        icon_font,
+                        icon_col,
+                    );
+
+                    if handle_resp.on_hover_text("Block actions").clicked() {
                         self.block_menu(block_id);
                     }
-                    let add = egui::Button::new(
-                        icon("plus").size(14.0).color(Color32::from_gray(120)),
-                    )
-                    .small();
-                    if ui
-                        .add_sized([17.0, 20.0], add)
-                        .on_hover_text("Insert block below")
-                        .clicked()
-                    {
+                    if plus_resp.on_hover_text("Insert block below").clicked() {
                         self.insert_block_below(block_id, BlockKind::Paragraph);
                     }
+                }
+
+                // ----- Uniform prefix strip: every block's text starts at the
+                // same x. List markers / checkboxes / quote bars are drawn in
+                // this fixed 24px strip instead of shifting the text. -----
+                let kind = self.blocks[idx].kind;
+                let sense = if kind == BlockKind::Todo {
+                    Sense::click()
                 } else {
-                    ui.add_space(gutter_width);
+                    Sense::hover()
+                };
+                let (prefix_rect, prefix_resp) =
+                    ui.allocate_exact_size(Vec2::new(24.0, 20.0), sense);
+                match kind {
+                    BlockKind::Bullet => {
+                        ui.painter().circle_filled(
+                            prefix_rect.right_center() - Vec2::new(6.0, 0.0),
+                            2.5,
+                            if dark { Color32::from_gray(200) } else { Color32::from_gray(120) },
+                        );
+                    }
+                    BlockKind::Numbered => {
+                        ui.put(
+                            prefix_rect,
+                            egui::Label::new(
+                                RichText::new(format!("{numbered_index}."))
+                                    .color(if dark { Color32::from_gray(170) } else { Color32::from_gray(110) })
+                                    .size(14.0),
+                            )
+                            .halign(egui::Align::Max),
+                        );
+                    }
+                    BlockKind::Todo => {
+                        let r = egui::Rect::from_center_size(
+                            prefix_rect.right_center() - Vec2::new(5.0, 0.0),
+                            Vec2::new(16.0, 16.0),
+                        );
+                        let rounding = 4.0;
+                        let stroke = egui::Stroke::new(
+                            1.4,
+                            if dark { Color32::from_gray(150) } else { Color32::from_gray(120) },
+                        );
+                        let checked = self.blocks[idx].checked;
+                        if checked {
+                            ui.painter()
+                                .rect_filled(r, rounding, Color32::from_rgb(80, 140, 255));
+                            ui.painter().line_segment(
+                                [r.center() - Vec2::new(3.5, 0.5), r.center() - Vec2::new(1.0, 3.0)],
+                                egui::Stroke::new(1.6, Color32::WHITE),
+                            );
+                            ui.painter().line_segment(
+                                [r.center() - Vec2::new(1.0, 3.0), r.center() + Vec2::new(3.5, 2.5)],
+                                egui::Stroke::new(1.6, Color32::WHITE),
+                            );
+                        } else {
+                            ui.painter().rect_stroke(r, rounding, stroke, egui::StrokeKind::Middle);
+                        }
+                        if prefix_resp.clicked() {
+                            self.blocks[idx].checked = !checked;
+                            *modified = true;
+                        }
+                    }
+                    BlockKind::Quote => {
+                        let bar = egui::Rect::from_min_size(
+                            prefix_rect.right_top() - Vec2::new(6.0, 2.0),
+                            Vec2::new(4.0, prefix_rect.height() + 4.0),
+                        );
+                        ui.painter().rect_filled(bar, 2.0, Color32::from_rgb(90, 140, 220));
+                    }
+                    _ => {}
                 }
 
                 // ----- Block content -----
@@ -210,7 +377,7 @@ impl Editor {
                     BlockKind::Code => {
                         let mut text = std::mem::take(&mut self.blocks[idx].text);
                         Frame::default()
-                            .fill(Color32::from_gray(28))
+                            .fill(if dark { Color32::from_gray(28) } else { Color32::from_gray(238) })
                             .inner_margin(8.0)
                             .corner_radius(6.0)
                             .show(ui, |ui| {
@@ -220,6 +387,13 @@ impl Editor {
                                     .desired_width(ui.available_width() - 16.0)                                    .frame(egui::Frame::NONE)
                                     .code_editor()
                                     .show(ui);
+                                if self.focus_block == Some(block_id) {
+                                    if out.response.has_focus() {
+                                        self.focus_block = None;
+                                    } else {
+                                        out.response.request_focus();
+                                    }
+                                }
                                 if out.response.has_focus() {
                                     self.hovered.insert(block_id);
                                     hovered_now.insert(block_id);
@@ -233,77 +407,6 @@ impl Editor {
                     }
                     _ => {
                         let mut text = std::mem::take(&mut self.blocks[idx].text);
-                        let checked = self.blocks[idx].checked;
-
-                        // Row prefix (bullet / number / checkbox / quote).
-                        let mut prefix_width = 0.0;
-                        match kind {
-                            BlockKind::Bullet => {
-                                ui.add_space(6.0);
-                                let (r, _) = ui.allocate_exact_size(
-                                    Vec2::new(14.0, ui.spacing().interact_size.y),
-                                    Sense::hover(),
-                                );
-                                ui.painter().circle_filled(
-                                    r.center(),
-                                    2.5,
-                                    Color32::from_gray(200),
-                                );
-                                prefix_width = 20.0;
-                            }
-                            BlockKind::Numbered => {
-                                ui.add_space(2.0);
-                                ui.label(
-                                    RichText::new(format!("{numbered_index}."))
-                                        .color(Color32::from_gray(170))
-                                        .size(14.0),
-                                );
-                                prefix_width = 22.0;
-                            }
-                            BlockKind::Todo => {
-                                let (r, resp) = ui.allocate_exact_size(
-                                    Vec2::new(16.0, 16.0),
-                                    Sense::click(),
-                                );
-                                let rounding = 4.0;
-                                let stroke =
-                                    egui::Stroke::new(1.4, Color32::from_gray(150));
-                                if checked {
-                                    ui.painter()
-                                        .rect_filled(r, rounding, Color32::from_rgb(80, 140, 255));
-                                    ui.painter().line_segment(
-                                        [r.center() - Vec2::new(3.5, 0.5), r.center() - Vec2::new(1.0, 3.0)],
-                                        egui::Stroke::new(1.6, Color32::WHITE),
-                                    );
-                                    ui.painter().line_segment(
-                                        [r.center() - Vec2::new(1.0, 3.0), r.center() + Vec2::new(3.5, 2.5)],
-                                        egui::Stroke::new(1.6, Color32::WHITE),
-                                    );
-                                } else {
-                                    ui.painter().rect_stroke(r, rounding, stroke, egui::StrokeKind::Middle);
-                                }
-                                if resp.clicked() {
-                                    self.blocks[idx].checked = !checked;
-                                    *modified = true;
-                                }
-                                prefix_width = 22.0;
-                            }
-                            BlockKind::Quote => {
-                                let (r, _) = ui.allocate_exact_size(
-                                    Vec2::new(4.0, ui.spacing().interact_size.y),
-                                    Sense::hover(),
-                                );
-                                ui.painter().rect_filled(
-                                    r,
-                                    2.0,
-                                    Color32::from_rgb(90, 140, 220),
-                                );
-                                ui.add_space(4.0);
-                                prefix_width = 10.0;
-                            }
-                            _ => {}
-                        }
-                        let _ = prefix_width;
 
                         let out = TextEdit::singleline(&mut text)
                             .id(Id::new(("block", block_id)))
@@ -311,6 +414,50 @@ impl Editor {
                             .desired_width(ui.available_width())
                             .frame(egui::Frame::NONE)
                             .show(ui);
+
+                        // Move keyboard focus into this block when an action
+                        // (Enter, slash pick, + button, …) targeted it. Cleared
+                        // once the focus has landed so we never fight the user
+                        // clicking into a different block.
+                        if self.focus_block == Some(block_id) {
+                            if out.response.has_focus() {
+                                self.focus_block = None;
+                            } else {
+                                out.response.request_focus();
+                            }
+                        }
+
+                        // Arrow up/down moves the cursor between blocks.
+                        if out.response.has_focus() && !in_slash {
+                            let (down, up) = ui.input(|i| {
+                                (i.key_pressed(Key::ArrowDown), i.key_pressed(Key::ArrowUp))
+                            });
+                            if down && idx + 1 < self.blocks.len() {
+                                self.focus_block = Some(self.blocks[idx + 1].id);
+                            } else if up && idx > 0 {
+                                self.focus_block = Some(self.blocks[idx - 1].id);
+                            }
+                        }
+
+                        // Cmd/Ctrl+A: if this block's text is already fully
+                        // selected, select ALL blocks instead (Notion-style).
+                        if out.response.has_focus()
+                            && cmd_a
+                            && !in_slash
+                            && out
+                                .cursor_range
+                                .map(|sel| {
+                                    let (a, b) =
+                                        (sel.primary.index.0, sel.secondary.index.0);
+                                    let (lo, hi) = (a.min(b), a.max(b));
+                                    lo == 0
+                                        && hi >= self.blocks[idx].text.chars().count()
+                                })
+                                .unwrap_or(false)
+                        {
+                            select_all_blocks = true;
+                            self.ate_key = true;
+                        }
 
                         if out.response.has_focus() {
                             self.hovered.insert(block_id);
@@ -332,12 +479,20 @@ impl Editor {
                             && ui.input(|i| i.key_pressed(Key::Enter))
                             && !self.ate_key;
 
-                        // Backspace on empty block merges with previous.
-                        let backspace_merge = text.is_empty()
-                            && out.response.has_focus()
+                        // Backspace at the very start of a block merges it
+                        // into the previous block (Notion-style).
+                        let cursor_at_start = out
+                            .cursor_range
+                            .map(|c| {
+                                let (a, b) = (c.primary.index.0, c.secondary.index.0);
+                                a == 0 && b == 0
+                            })
+                            .unwrap_or(false);
+                        let backspace_merge = out.response.has_focus()
                             && ui.input(|i| i.key_pressed(Key::Backspace))
-                            && self.blocks.len() > 1
-                            && !in_slash;
+                            && !in_slash
+                            && (text.is_empty() || cursor_at_start)
+                            && self.blocks.len() > 1;
 
                         self.blocks[idx].text = text;
 
@@ -382,22 +537,95 @@ impl Editor {
                                 0
                             };
                             if prev_id != 0 {
-                                let cur = self.blocks.remove(idx);
-                                if let Some(prev) =
-                                    self.blocks.iter_mut().find(|b| b.id == prev_id)
-                                {
-                                    prev.text.push_str(&cur.text);
-                                }
-                                self.focus_block = Some(prev_id);
-                                *modified = true;
+                                pending_merge = Some((prev_id, block_id));
                             }
                         }
                     }
                 }
             });
+
+            // Record the row rect (extended across the full width) for
+            // drag-select hit testing, and tint selected rows.
+            let mut row_r = row_resp.response.rect;
+            row_r.max.x = row_r.min.x + 4000.0;
+            self.row_rects.insert(block_id, row_r);
+            if is_selected || self.selected_blocks.contains(&block_id) {
+                ui.painter().rect_filled(
+                    row_resp.response.rect,
+                    4.0,
+                    Color32::from_rgba_unmultiplied(130, 175, 255, 26),
+                );
+            }
         }
 
         self.hovered = hovered_now;
+
+        // Apply a deferred backspace merge (safe now: the block loop is done).
+        if let Some((prev_id, cur_id)) = pending_merge {
+            if let Some(cur_pos) = self.blocks.iter().position(|b| b.id == cur_id) {
+                let cur = self.blocks.remove(cur_pos);
+                if let Some(prev) = self.blocks.iter_mut().find(|b| b.id == prev_id) {
+                    prev.text.push_str(&cur.text);
+                }
+                self.focus_block = Some(prev_id);
+                self.last_focused = Some(prev_id);
+                self.selected_blocks.clear();
+                self.slash = None;
+                *modified = true;
+            }
+        }
+
+        // Cmd/Ctrl+A → select all blocks.
+        if select_all_blocks {
+            self.selected_blocks = self.blocks.iter().map(|b| b.id).collect();
+        }
+
+        // Update the drag selection while the pointer is held down.
+        if primary_down && pointer_pos.is_some() {
+            if let Some(anchor) = self.select_drag {
+                let pos = pointer_pos.unwrap();
+                let (top, bottom) = if pos.y < anchor {
+                    (pos.y, anchor)
+                } else {
+                    (anchor, pos.y)
+                };
+                self.selected_blocks.retain(|id| {
+                    self.row_rects
+                        .get(id)
+                        .map(|r| r.top() <= bottom && r.bottom() >= top)
+                        .unwrap_or(false)
+                });
+                for (id, r) in &self.row_rects {
+                    if r.top() <= bottom && r.bottom() >= top {
+                        self.selected_blocks.insert(*id);
+                    }
+                }
+            }
+        } else {
+            self.select_drag = None;
+        }
+
+        // Delete / escape for multi-block selection (only when no text field
+        // has focus, so typing in a block is never hijacked).
+        if !self.selected_blocks.is_empty() {
+            if ui.input(|i| i.key_pressed(Key::Escape)) {
+                self.selected_blocks.clear();
+            }
+            let delete_pressed =
+                ui.input(|i| i.key_pressed(Key::Backspace) || i.key_pressed(Key::Delete));
+            let no_text_focus = ui.ctx().memory(|m| m.focused().is_none());
+            if delete_pressed && no_text_focus {
+                self.blocks.retain(|b| !self.selected_blocks.contains(&b.id));
+                self.selected_blocks.clear();
+                self.last_focused = None;
+                if self.blocks.is_empty() {
+                    self.blocks
+                        .push(Block::new(self.next_id, BlockKind::Paragraph));
+                    self.next_id += 1;
+                }
+                *modified = true;
+            }
+        }
 
         // Slash menu trigger from this frame.
         if let Some(block_id) = slash_open_request {
@@ -456,6 +684,27 @@ impl Editor {
         let items = self.filtered_slash_items(block_id);
         let selected = self.slash.as_ref().map(|s| s.selected).unwrap_or(0);
 
+        // Theme-aware colors (the menu previously used hardcoded dark colors,
+        // which looked broken in light mode).
+        let dark = ui.visuals().dark_mode;
+        let (menu_fill, sel_fill, text_col) = if dark {
+            (
+                Color32::from_gray(32),
+                Color32::from_rgb(45, 70, 110),
+                Color32::from_gray(225),
+            )
+        } else {
+            (
+                Color32::from_gray(252),
+                Color32::from_rgb(219, 233, 253),
+                Color32::from_gray(30),
+            )
+        };
+
+        // Fixed-width rows: a content-sized popup oscillates in width
+        // (shrinking/growing from the right) as the selection changes.
+        let menu_width = 220.0;
+
         let area_id = Id::new("slash_menu").with(block_id);
         Area::new(area_id)
             .fixed_pos(rect.left_bottom() + Vec2::new(0.0, 4.0))
@@ -463,7 +712,7 @@ impl Editor {
             .movable(false)
             .show(ui.ctx(), |ui| {
                 Frame::popup(ui.style())
-                    .fill(Color32::from_gray(32))
+                    .fill(menu_fill)
                     .inner_margin(4.0)
                     .corner_radius(8.0)
                     .show(ui, |ui| {
@@ -472,20 +721,15 @@ impl Editor {
                             .show(ui, |ui| {
                                 for (i, kind) in items.iter().enumerate() {
                                     let is_sel = i == selected.min(items.len().saturating_sub(1));
-                                    let bg = if is_sel {
-                                        Color32::from_rgb(45, 70, 110)
-                                    } else {
-                                        Color32::TRANSPARENT
-                                    };
                                     let job = icon_job(
                                         kind.icon_name(),
                                         kind.label(),
                                         14.0,
-                                        Color32::from_gray(225),
+                                        text_col,
                                     );
                                     let btn = egui::Button::new(job)
-                                        .fill(bg)
-                                        .min_size(Vec2::new(ui.available_width() - 8.0, 24.0));
+                                        .fill(if is_sel { sel_fill } else { Color32::TRANSPARENT })
+                                        .min_size(Vec2::new(menu_width - 8.0, 26.0));
                                     let resp = ui.add(btn);
                                     if resp.clicked() {
                                         self.apply_slash(block_id, *kind);

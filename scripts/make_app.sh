@@ -1,0 +1,53 @@
+#!/bin/sh
+# Assembles a minimal macOS app bundle (target/KbWrite.app) around the
+# debug binary, so you can launch it with `open target/KbWrite.app`.
+#
+# Why: processes launched from some IDE terminals (e.g. the Cursor terminal)
+# run inside a sandbox that blocks filesystem and GUI access. Apps launched
+# via `open` are spawned by launchd and run unrestricted.
+set -e
+cd "$(dirname "$0")/.."
+
+echo "Building (debug)…"
+cargo build
+
+APP="target/KbWrite.app"
+BIN="$APP/Contents/MacOS"
+RES="$APP/Contents/Resources"
+
+rm -rf "$APP"
+mkdir -p "$BIN" "$RES"
+
+cp target/debug/kbwrite "$BIN/kbwrite-bin"
+
+cat > "$BIN/KbWrite" <<'LAUNCH'
+#!/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$DIR/kbwrite-bin" 2>> "$DIR/../kbwrite.log"
+LAUNCH
+chmod +x "$BIN/KbWrite"
+
+cat > "$APP/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>KbWrite</string>
+    <key>CFBundleIdentifier</key>
+    <string>co.zetahive.kbwrite</string>
+    <key>CFBundleName</key>
+    <string>KbWrite</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.1</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.1</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
+PLIST
+
+echo "Created $APP — launch it with:  open $APP"

@@ -21,10 +21,8 @@ fn main() -> eframe::Result<()> {
         "KbWrite",
         options,
         Box::new(|cc| {
-            // Register the Phosphor icon font once at startup.
-            let mut fonts = egui::FontDefinitions::default();
-            egui_phosphor_icons::add_fonts(&mut fonts);
-            cc.egui_ctx.set_fonts(fonts);
+            // Fonts: Phosphor icons + platform default UI/code fonts.
+            cc.egui_ctx.set_fonts(app::font_definitions());
             Ok(app::KbWriteApp::new(cc) as Box<dyn eframe::App>)
         }),
     )

@@ -1,7 +1,7 @@
 # KbWrite
 
 A local-first, Obsidian-style knowledge base written in **native Rust** with
-[egui](https://github.com/emilk/egui) / **eframe** — no Electron, no browser, just one fast binary.
+[egui](https://github.com/emilk/egui) / **eframe** — a single fast native binary.
 
 Your notes are plain **markdown files** in a folder on disk (your *vault*), so they stay yours:
 portable, diffable, and easy to back up.
@@ -19,8 +19,9 @@ portable, diffable, and easy to back up.
   OpenRouter, …). Select a block, press `Cmd/Ctrl+I`, type an instruction like
   *"fix grammar"*, *"summarize"* or *"turn into bullets"* — the result is inserted right below.
 - **Phosphor icons** throughout, via [egui_phosphor_icons](https://docs.rs/egui_phosphor_icons/latest/egui_phosphor_icons/).
-- **Light & dark mode** — one-click theme switch in the sidebar.
-- **Editor / Raw tabs** — write in the block editor, or drop down to raw markdown anytime.
+- **Light & dark mode** — one-click moon/sun toggle in the toolbar.
+- **Editor / Raw toggle** — write in the block editor, or drop down to raw markdown anytime.
+- **System fonts** — uses your platform's default UI and code fonts.
 - **Fast & native** — built with Rust and GPU rendering.
 
 ## Keyboard shortcuts
