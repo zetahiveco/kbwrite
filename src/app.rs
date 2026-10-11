@@ -4,8 +4,50 @@ use crate::ai;
 use crate::editor::Editor;
 use crate::settings::Settings;
 use crate::vault::{NoteMeta, Vault};
-use eframe::egui::{self, Align, Color32, Key, Layout, RichText, ScrollArea, TextEdit, Ui, Window};
+use eframe::egui::{
+    self, Align, Color32, FontFamily, FontId, Key, Layout, RichText, ScrollArea, TextEdit, Ui,
+    Window,
+};
+use egui_phosphor_icons::Icon;
 use std::sync::mpsc::{self, Receiver};
+
+const PHOSPHOR: &str = "phosphor-regular";
+
+/// Standalone icon rendered with the Phosphor font family.
+fn icon(name: &str) -> RichText {
+    Icon::from_name(name)
+        .map(|i| i.regular())
+        .unwrap_or_else(|| RichText::new("\u{2022}"))
+}
+
+/// Raw glyph string (for LayoutJob composition).
+fn glyph(name: &str) -> String {
+    Icon::from_name(name)
+        .map(|i| i.0.to_string())
+        .unwrap_or_else(|| "\u{2022}".to_string())
+}
+
+/// Icon + text in one label, each with the right font family.
+fn icon_job(name: &str, text: &str, size: f32, color: Color32) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        &glyph(name),
+        4.0,
+        egui::TextFormat::simple(FontId::new(size, FontFamily::Name(PHOSPHOR.into())), color),
+    );
+    job.append(
+        text,
+        0.0,
+        egui::TextFormat::simple(FontId::new(size, FontFamily::Proportional), color),
+    );
+    job
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ViewMode {
+    Editor,
+    Raw,
+}
 
 pub struct KbWriteApp {
     settings: Settings,
@@ -14,6 +56,9 @@ pub struct KbWriteApp {
     current_note: Option<NoteMeta>,
     editor: Editor,
     dirty: bool,
+
+    view: ViewMode,
+    raw_text: String,
 
     // Sidebar
     search: String,
@@ -27,10 +72,10 @@ pub struct KbWriteApp {
     ai_rx: Option<Receiver<Result<String, String>>>,
     ai: AiState,
 
-    pub active_block_for_ai: Option<u64>,
+    active_block_for_ai: Option<u64>,
     toasts: Vec<(String, std::time::Instant)>,
     pending_open: Option<usize>,
-    pending_delete: Option<(usize, std::path::PathBuf)>,
+    pending_delete: Option<std::path::PathBuf>,
 }
 
 #[derive(Default)]
@@ -44,8 +89,16 @@ struct AiState {
 
 impl KbWriteApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Box<Self> {
-        configure_dark_theme(&cc.egui_ctx);
         let settings = Settings::load();
+        apply_theme(&cc.egui_ctx, settings.dark_mode);
+
+        // Register the Phosphor icon fonts (idempotent with main.rs).
+        {
+            let mut fonts = egui::FontDefinitions::default();
+            egui_phosphor_icons::add_fonts(&mut fonts);
+            cc.egui_ctx.set_fonts(fonts);
+        }
+
         let vault = Vault::open(&settings.vault_path).ok();
         let mut app = Box::new(Self {
             vault,
@@ -54,6 +107,8 @@ impl KbWriteApp {
             current_note: None,
             editor: Editor::new(),
             dirty: false,
+            view: ViewMode::Editor,
+            raw_text: String::new(),
             search: String::new(),
             new_note_title: String::new(),
             creating_new_note: false,
@@ -67,7 +122,6 @@ impl KbWriteApp {
         });
         app.refresh_notes();
 
-        // Open the welcome note on first launch (create the vault with one if empty).
         if app.notes.is_empty() {
             let _ = app.ensure_default_note();
             app.refresh_notes();
@@ -91,7 +145,7 @@ impl KbWriteApp {
     }
 
     fn open_note(&mut self, idx: usize) {
-        self.save_current();
+        self.sync_raw_to_editor();
         if let Some(note) = self.notes.get(idx).cloned() {
             if let Some(vault) = &self.vault {
                 if let Ok(content) = vault.read_note(&note.path) {
@@ -102,10 +156,24 @@ impl KbWriteApp {
             }
             self.current_note = Some(note);
             self.dirty = false;
+            self.view = ViewMode::Editor;
+            self.raw_text.clear();
+        }
+    }
+
+    /// If we are in Raw mode, push the raw markdown into the block editor.
+    fn sync_raw_to_editor(&mut self) {
+        if self.view == ViewMode::Raw && !self.raw_text.is_empty() {
+            let raw = std::mem::take(&mut self.raw_text);
+            if raw != self.editor.to_markdown() {
+                self.editor.load_markdown(&raw);
+                self.dirty = true;
+            }
         }
     }
 
     fn save_current(&mut self) {
+        self.sync_raw_to_editor();
         if let (Some(vault), Some(note)) = (&self.vault, &self.current_note.clone()) {
             let content = self.editor.to_markdown();
             if vault.write_note(&note.path, &content).is_ok() {
@@ -114,17 +182,21 @@ impl KbWriteApp {
         }
     }
 
+    fn toggle_theme(&mut self, ctx: &egui::Context) {
+        self.settings.dark_mode = !self.settings.dark_mode;
+        apply_theme(ctx, self.settings.dark_mode);
+        let _ = self.settings.save();
+    }
+
     fn toast(&mut self, msg: impl Into<String>) {
-        self.toasts
-            .push((msg.into(), std::time::Instant::now() + std::time::Duration::from_secs(4)));
+        self.toasts.push((
+            msg.into(),
+            std::time::Instant::now() + std::time::Duration::from_secs(4),
+        ));
     }
 
     fn new_note(&mut self, title: &str) {
-        match self
-            .vault
-            .as_ref()
-            .map(|v| v.create_note(title, ""))
-        {
+        match self.vault.as_ref().map(|v| v.create_note(title, "")) {
             Some(Ok(note)) => {
                 self.refresh_notes();
                 if let Some(i) = self.notes.iter().position(|n| n.path == note.path) {
@@ -139,12 +211,9 @@ impl KbWriteApp {
     }
 
     fn start_ai(&mut self) {
+        self.sync_raw_to_editor();
         self.ai.open = true;
         self.ai.error = None;
-        if self.ai.instruction.is_empty() {
-            self.ai.instruction = String::new();
-        }
-        // Preload the target block text as context hint in the result pane.
         self.ai.result.clear();
         self.active_block_for_ai = self.editor.last_focused;
     }
@@ -183,8 +252,8 @@ impl KbWriteApp {
 
         let instruction = instruction.to_string();
         std::thread::spawn(move || {
-            let result = ai::complete(&settings, &instruction, &target)
-                .map_err(|e| format!("{e:#}"));
+            let result =
+                ai::complete(&settings, &instruction, &target).map_err(|e| format!("{e:#}"));
             let _ = tx.send(result);
         });
     }
@@ -208,7 +277,6 @@ impl eframe::App for KbWriteApp {
         self.draw_ai_window(&ctx);
         self.draw_toasts(&ctx);
 
-        // Repaint soon while a note is dirty (autosave prompt).
         if self.dirty {
             ctx.request_repaint_after(std::time::Duration::from_millis(500));
         }
@@ -230,24 +298,20 @@ impl KbWriteApp {
             }
         };
 
-        let save = ctx.input(|i| cmd(i) && i.key_pressed(Key::S));
-        if save {
+        if ctx.input(|i| cmd(i) && i.key_pressed(Key::S)) {
             self.save_current();
             self.toast("Note saved");
         }
 
-        let new_note = ctx.input(|i| cmd(i) && i.key_pressed(Key::N));
-        if new_note {
+        if ctx.input(|i| cmd(i) && i.key_pressed(Key::N)) {
             self.creating_new_note = true;
         }
 
-        let ai_key = ctx.input(|i| cmd(i) && i.key_pressed(Key::I));
-        if ai_key && self.current_note.is_some() {
+        if ctx.input(|i| cmd(i) && i.key_pressed(Key::I)) && self.current_note.is_some() {
             self.start_ai();
         }
 
-        let settings_key = ctx.input(|i| cmd(i) && i.key_pressed(Key::Comma));
-        if settings_key {
+        if ctx.input(|i| cmd(i) && i.key_pressed(Key::Comma)) {
             self.show_settings = !self.show_settings;
         }
     }
@@ -256,6 +320,7 @@ impl KbWriteApp {
         if let Some(rx) = &self.ai_rx {
             match rx.try_recv() {
                 Ok(Ok(result)) => {
+                    self.sync_raw_to_editor();
                     self.ai.busy = false;
                     self.ai.result = result.clone();
                     self.editor.insert_ai_result(&result);
@@ -281,35 +346,47 @@ impl KbWriteApp {
             .resizable(true)
             .default_size(260.0)
             .min_size(180.0)
+            .max_size(420.0)
+            .frame(
+                egui::Frame::NONE
+                    .fill(if self.settings.dark_mode {
+                        Color32::from_gray(24)
+                    } else {
+                        Color32::from_gray(242)
+                    }),
+            )
             .show(ui, |ui| {
                 ui.add_space(8.0);
-                // App title + settings button
+                // App title + actions
                 ui.horizontal(|ui| {
                     ui.add_space(10.0);
                     ui.label(
-                        RichText::new(format!("{}  ", icon("notebook")))
+                        icon("notebook")
                             .size(18.0)
-                            .color(Color32::from_rgb(150, 190, 255)),
+                            .color(accent(self.settings.dark_mode)),
                     );
                     ui.label(RichText::new("KbWrite").size(17.0).strong());
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.add_space(6.0); // keep inside: trailing space AFTER this layout overflows
                         if icon_button(ui, "gear-six", "Settings (Cmd/Ctrl+,)") {
                             self.show_settings = !self.show_settings;
+                        }
+                        if icon_button(ui, "sun-moon", "Toggle light/dark mode") {
+                            self.toggle_theme(&ctx);
                         }
                         if icon_button(ui, "plus", "New note (Cmd/Ctrl+N)") {
                             self.creating_new_note = true;
                         }
                     });
-                    ui.add_space(6.0);
                 });
                 ui.add_space(6.0);
-
                 // Search box
                 ui.horizontal(|ui| {
                     ui.add_space(10.0);
+                    ui.label(icon("magnifying-glass").size(13.0).color(muted(self.settings.dark_mode)));
                     let search = TextEdit::singleline(&mut self.search)
-                        .hint_text(RichText::new(format!("{}  Search notes…", icon("magnifying-glass"))))
-                        .desired_width(ui.available_width() - 20.0)
+                        .hint_text("Search notes…")
+                        .desired_width(ui.available_width() - 12.0)
                         .frame(egui::Frame::NONE);
                     ui.add(search);
                     ui.add_space(4.0);
@@ -320,8 +397,8 @@ impl KbWriteApp {
                 // Note list
                 ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                     let query = self.search.trim().to_lowercase();
-                    for (i, note) in self
-                        .notes
+                    let notes = self.notes.clone();
+                    for (i, note) in notes
                         .iter()
                         .filter(|n| query.is_empty() || n.rel.to_lowercase().contains(&query))
                         .enumerate()
@@ -331,30 +408,23 @@ impl KbWriteApp {
                             .as_ref()
                             .map(|c| c.path == note.path)
                             .unwrap_or(false);
-                        let label = if self.dirty && is_current {
-                            format!("{} {}", icon("file-text"), note.rel)
+                        let text_color = if is_current {
+                            accent(self.settings.dark_mode)
                         } else {
-                            format!("{} {}", icon("file-text"), note.rel)
+                            normal_text(self.settings.dark_mode)
                         };
-                        let text = RichText::new(label).size(13.5).color(if is_current {
-                            Color32::from_rgb(140, 180, 255)
-                        } else {
-                            Color32::from_gray(200)
-                        });
-                        ui.horizontal(|ui| {
-                            let resp = ui.selectable_label(is_current, text);
-                            if resp.clicked() {
-                                // handled below via index lookup
-                            }
-                            if resp.clicked() {
-                                self.pending_open = Some(i);
-                            }
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                if icon_button(ui, "trash", "Delete note") {
-                                    self.pending_delete = Some((i, note.path.clone()));
-                                }
-                            });
-                        });
+                        let job = icon_job(
+                            "file-text",
+                            &note.rel,
+                            13.5,
+                            text_color,
+                        );
+                        if ui
+                            .selectable_label(is_current, job)
+                            .clicked()
+                        {
+                            self.pending_open = Some(i);
+                        }
                     }
                 });
 
@@ -363,9 +433,14 @@ impl KbWriteApp {
                 ui.horizontal(|ui| {
                     ui.add_space(10.0);
                     ui.label(
-                        RichText::new(format!("{}  {}", icon("folder-open"), vault_display(&self.settings.vault_path)))
+                        icon("folder-open")
                             .size(11.0)
-                            .color(Color32::from_gray(130)),
+                            .color(muted(self.settings.dark_mode)),
+                    );
+                    ui.label(
+                        RichText::new(vault_display(&self.settings.vault_path))
+                            .size(11.0)
+                            .color(muted(self.settings.dark_mode)),
                     );
                 });
                 ui.add_space(4.0);
@@ -375,9 +450,7 @@ impl KbWriteApp {
         if let Some(i) = self.pending_open.take() {
             self.open_note(i);
         }
-        if let Some((_, ref path)) = self.pending_delete {
-            let path = path.clone();
-            self.pending_delete = None;
+        if let Some(path) = self.pending_delete.take() {
             let was_current = self
                 .current_note
                 .as_ref()
@@ -405,7 +478,7 @@ impl KbWriteApp {
             let mut open = true;
             let mut create = false;
             let mut cancel = false;
-            Window::new(format!("{}  New note", icon("plus")))
+            Window::new(icon_job("plus", "New note", 15.0, normal_text(self.settings.dark_mode)))
                 .open(&mut open)
                 .collapsible(false)
                 .resizable(false)
@@ -444,81 +517,167 @@ impl KbWriteApp {
     }
 
     fn draw_main(&mut self, ui: &mut Ui) {
-        egui::CentralPanel::default().show(ui, |ui| {
-            // Toolbar
-            ui.horizontal(|ui| {
-                let title = self
-                    .current_note
-                    .as_ref()
-                    .map(|n| n.title.clone())
-                    .unwrap_or_else(|| "No note".to_string());
-                ui.label(
-                    RichText::new(format!("{}  {}", icon("file-text"), title))
-                        .size(16.0)
-                        .strong(),
-                );
-                if self.dirty {
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::central_panel(ui.style()).fill(if self.settings.dark_mode {
+                    Color32::from_gray(18)
+                } else {
+                    Color32::WHITE
+                }),
+            )
+            .show(ui, |ui| {
+                // Toolbar
+                ui.horizontal(|ui| {
+                    let title = self
+                        .current_note
+                        .as_ref()
+                        .map(|n| n.title.clone())
+                        .unwrap_or_else(|| "No note".to_string());
                     ui.label(
-                        RichText::new("• unsaved")
-                            .size(12.0)
-                            .color(Color32::from_gray(140)),
+                        icon("file-text")
+                            .size(16.0)
+                            .color(accent(self.settings.dark_mode)),
                     );
+                    ui.label(RichText::new(&title).size(16.0).strong());
+                    if self.dirty {
+                        ui.label(
+                            RichText::new("• unsaved")
+                                .size(12.0)
+                                .color(muted(self.settings.dark_mode)),
+                        );
+                    }
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if icon_button(ui, "floppy-disk", "Save (Cmd/Ctrl+S)") {
+                            self.save_current();
+                            self.toast("Note saved");
+                        }
+                        if icon_button(ui, "trash", "Delete this note") {
+                            if let Some(path) = self.current_note.as_ref().map(|n| n.path.clone()) {
+                                self.pending_delete = Some(path);
+                            }
+                        }
+                        if ui
+                            .add(egui::Button::new(icon_job(
+                                "sparkle",
+                                "AI Assist",
+                                13.0,
+                                normal_text(self.settings.dark_mode),
+                            )))
+                            .on_hover_text("Inline AI text (Cmd/Ctrl+I)")
+                            .clicked()
+                        {
+                            self.start_ai();
+                        }
+
+                        // Editor / Raw tabs
+                        let editor_sel = self.view == ViewMode::Editor;
+                        let raw_sel = self.view == ViewMode::Raw;
+                        if ui
+                            .add(egui::Button::new(icon_job(
+                                "split-horizontal",
+                                "Editor",
+                                13.0,
+                                if editor_sel {
+                                    accent(self.settings.dark_mode)
+                                } else {
+                                    normal_text(self.settings.dark_mode)
+                                },
+                            )))
+                            .clicked()
+                        {
+                            if self.view == ViewMode::Raw {
+                                self.sync_raw_to_editor();
+                                self.raw_text.clear();
+                            }
+                            self.view = ViewMode::Editor;
+                        }
+                        if ui
+                            .add(egui::Button::new(icon_job(
+                                "markdown-logo",
+                                "Raw",
+                                13.0,
+                                if raw_sel {
+                                    accent(self.settings.dark_mode)
+                                } else {
+                                    normal_text(self.settings.dark_mode)
+                                },
+                            )))
+                            .on_hover_text("Edit raw markdown")
+                            .clicked()
+                        {
+                            if self.view == ViewMode::Editor {
+                                self.raw_text = self.editor.to_markdown();
+                            }
+                            self.view = ViewMode::Raw;
+                        }
+
+                        ui.label(
+                            RichText::new("Type  /  for blocks")
+                                .size(11.5)
+                                .color(muted(self.settings.dark_mode)),
+                        );
+                    });
+                });
+                ui.separator();
+
+                if self.current_note.is_none() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(80.0);
+                        ui.label(
+                            icon("note-blank")
+                                .size(48.0)
+                                .color(muted(self.settings.dark_mode)),
+                        );
+                        ui.label("Select or create a note to start writing.");
+                        if ui.button("New note").clicked() {
+                            self.creating_new_note = true;
+                        }
+                    });
+                    return;
                 }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if icon_button(ui, "floppy-disk", "Save (Cmd/Ctrl+S)") {
-                        self.save_current();
-                        self.toast("Note saved");
+
+                match self.view {
+                    ViewMode::Editor => {
+                        ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+                            ui.add_space(8.0);
+                            let mut modified = false;
+                            self.editor.show(ui, &mut modified);
+                            if modified {
+                                self.dirty = true;
+                            }
+                            ui.add_space(120.0);
+                        });
                     }
-                    if ui
-                        .button(
-                            RichText::new(format!("{}  AI Assist", icon("sparkle")))
-                                .size(13.0),
-                        )
-                        .on_hover_text("Inline AI text (Cmd/Ctrl+I)")
-                        .clicked()
-                    {
-                        self.start_ai();
+                    ViewMode::Raw => {
+                        ui.add_space(4.0);
+                        ui.label(
+                            RichText::new("Raw markdown — changes apply when you switch back to Editor")
+                                .size(11.0)
+                                .color(muted(self.settings.dark_mode)),
+                        );
+                        let mut modified_raw = false;
+                        ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+                            let out = TextEdit::multiline(&mut self.raw_text)
+                                .font(egui::TextStyle::Monospace)
+                                .desired_width(ui.available_width())
+                                .frame(egui::Frame::NONE)
+                                .code_editor()
+                                .show(ui);
+                            if out.response.changed() {
+                                modified_raw = true;
+                            }
+                        });
+                        if modified_raw {
+                            self.dirty = true;
+                        }
                     }
-                    ui.label(
-                        RichText::new("Type  /  for blocks")
-                            .size(11.5)
-                            .color(Color32::from_gray(120)),
-                    );
-                });
-                ui.add_space(8.0);
+                }
             });
-            ui.separator();
-
-            if self.current_note.is_none() {
-                ui.vertical_centered(|ui| {
-                    ui.add_space(80.0);
-                    ui.label(RichText::new(icon("note-blank")).size(48.0).color(Color32::from_gray(90)));
-                    ui.label("Select or create a note to start writing.");
-                    if ui.button("New note").clicked() {
-                        self.creating_new_note = true;
-                    }
-                });
-                return;
-            }
-
-            ScrollArea::vertical()
-                .auto_shrink(false)
-                .show(ui, |ui| {
-                    ui.add_space(8.0);
-                    let mut modified = false;
-                    let mut open_ai = false;
-                    self.editor.show(ui, &mut modified, &mut open_ai);
-                    if modified {
-                        self.dirty = true;
-                    }
-                    ui.add_space(120.0);
-                });
-        });
     }
 
     fn draw_settings_window(&mut self, ctx: &egui::Context) {
         let mut open = self.show_settings;
-        Window::new(format!("{}  Settings", icon("gear-six")))
+        Window::new(icon_job("gear-six", "Settings", 15.0, normal_text(self.settings.dark_mode)))
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -526,6 +685,24 @@ impl KbWriteApp {
             .show(ctx, |ui| {
                 ui.add_space(4.0);
 
+                ui.heading(RichText::new("Appearance").size(14.0));
+                ui.add_space(2.0);
+                ui.horizontal(|ui| {
+                    let label = if self.settings.dark_mode { "Dark mode" } else { "Light mode" };
+                    if ui
+                        .add(egui::Button::new(icon_job(
+                            if self.settings.dark_mode { "moon" } else { "sun" },
+                            label,
+                            13.0,
+                            normal_text(self.settings.dark_mode),
+                        )))
+                        .clicked()
+                    {
+                        self.toggle_theme(ctx);
+                    }
+                });
+
+                ui.add_space(10.0);
                 ui.heading(RichText::new("Vault").size(14.0));
                 ui.add_space(2.0);
                 {
@@ -533,7 +710,7 @@ impl KbWriteApp {
                     let resp = ui.add(
                         TextEdit::singleline(&mut vault)
                             .hint_text("Path to your notes folder")
-                            .desired_width(ui.available_width() - 90.0),
+                            .desired_width(ui.available_width() - 110.0),
                     );
                     if resp.changed() {
                         self.settings.vault_path = vault.clone().into();
@@ -549,37 +726,44 @@ impl KbWriteApp {
                 }
 
                 ui.add_space(10.0);
-                ui.heading(RichText::new(format!("{}  Inline AI (OpenAI-compatible)", icon("sparkle"))).size(14.0));
+                ui.heading(
+                    RichText::new("Inline AI (OpenAI-compatible)").size(14.0),
+                );
                 ui.label(
-                    RichText::new("Used by the AI Assist action. Works with OpenAI, Ollama, LM Studio, or any compatible endpoint.")
+                    RichText::new("Used by the AI Assist action. Works with OpenAI, Ollama, LM Studio, OpenRouter, or any compatible endpoint.")
                         .size(12.0)
-                        .color(Color32::from_gray(150)),
+                        .color(muted(self.settings.dark_mode)),
                 );
                 ui.add_space(4.0);
-                egui::Grid::new("ai_settings").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                    ui.label("Base URL");
-                    let url = TextEdit::singleline(&mut self.settings.openai_base_url)
-                        .hint_text("https://api.openai.com/v1")
-                        .desired_width(300.0);
-                    ui.add(url);
-                    ui.end_row();
+                egui::Grid::new("ai_settings")
+                    .num_columns(2)
+                    .spacing([10.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.label("Base URL");
+                        ui.add(
+                            TextEdit::singleline(&mut self.settings.openai_base_url)
+                                .hint_text("https://api.openai.com/v1")
+                                .desired_width(300.0),
+                        );
+                        ui.end_row();
 
-                    ui.label("Model");
-                    ui.add(
-                        TextEdit::singleline(&mut self.settings.openai_model)
-                            .hint_text("gpt-4o-mini")
-                            .desired_width(300.0),
-                    );
-                    ui.end_row();
+                        ui.label("Model");
+                        ui.add(
+                            TextEdit::singleline(&mut self.settings.openai_model)
+                                .hint_text("gpt-4o-mini")
+                                .desired_width(300.0),
+                        );
+                        ui.end_row();
 
-                    ui.label("API key");
-                    let key = TextEdit::singleline(&mut self.settings.openai_api_key)
-                        .password(true)
-                        .hint_text("sk-…")
-                        .desired_width(300.0);
-                    ui.add(key);
-                    ui.end_row();
-                });
+                        ui.label("API key");
+                        ui.add(
+                            TextEdit::singleline(&mut self.settings.openai_api_key)
+                                .password(true)
+                                .hint_text("sk-…")
+                                .desired_width(300.0),
+                        );
+                        ui.end_row();
+                    });
 
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
@@ -609,7 +793,7 @@ impl KbWriteApp {
             return;
         }
         let mut open = self.ai.open;
-        Window::new(format!("{}  AI Assist", icon("sparkle")))
+        Window::new(icon_job("sparkle", "AI Assist", 15.0, normal_text(self.settings.dark_mode)))
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
@@ -619,10 +803,13 @@ impl KbWriteApp {
                     RichText::new(format!(
                         "Model: {}  ·  Target: {}",
                         self.settings.openai_model,
-                        self.current_note.as_ref().map(|n| n.title.clone()).unwrap_or_default()
+                        self.current_note
+                            .as_ref()
+                            .map(|n| n.title.clone())
+                            .unwrap_or_default()
                     ))
                     .size(11.5)
-                    .color(Color32::from_gray(140)),
+                    .color(muted(self.settings.dark_mode)),
                 );
                 ui.add_space(4.0);
                 let inst = TextEdit::singleline(&mut self.ai.instruction)
@@ -638,14 +825,17 @@ impl KbWriteApp {
                         ui.add(egui::Spinner::new().size(16.0));
                         ui.label("Thinking…");
                     } else if ui
-                        .button(format!("{}  Run", icon("play")))
+                        .add(egui::Button::new(icon_job(
+                            "play",
+                            "Run",
+                            13.0,
+                            normal_text(self.settings.dark_mode),
+                        )))
                         .clicked()
                     {
                         self.run_ai();
                     }
-                    if !self.ai.result.is_empty()
-                        && ui.button("Copy result").clicked()
-                    {
+                    if !self.ai.result.is_empty() && ui.button("Copy result").clicked() {
                         let text = self.ai.result.clone();
                         ui.output_mut(|o| {
                             o.commands.push(egui::OutputCommand::CopyText(text))
@@ -655,7 +845,7 @@ impl KbWriteApp {
                 if let Some(err) = &self.ai.error {
                     ui.add_space(4.0);
                     ui.label(
-                        RichText::new(format!("{}  {}", icon("warning"), err))
+                        RichText::new(err)
                             .color(Color32::from_rgb(255, 120, 120))
                             .size(12.5),
                     );
@@ -669,7 +859,7 @@ impl KbWriteApp {
                     ui.label(
                         RichText::new("Result inserted below the focused block.")
                             .size(11.0)
-                            .color(Color32::from_gray(130)),
+                            .color(muted(self.settings.dark_mode)),
                     );
                 }
             });
@@ -686,7 +876,11 @@ impl KbWriteApp {
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
                     egui::Frame::popup(ui.style())
-                        .fill(Color32::from_gray(40))
+                        .fill(if self.settings.dark_mode {
+                            Color32::from_gray(40)
+                        } else {
+                            Color32::from_gray(250)
+                        })
                         .corner_radius(8.0)
                         .inner_margin(8.0)
                         .show(ui, |ui| {
@@ -701,6 +895,30 @@ impl KbWriteApp {
 // Helpers
 // ---------------------------------------------------------------------------
 
+fn accent(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(150, 190, 255)
+    } else {
+        Color32::from_rgb(40, 90, 200)
+    }
+}
+
+fn normal_text(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(210)
+    } else {
+        Color32::from_gray(40)
+    }
+}
+
+fn muted(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(130)
+    } else {
+        Color32::from_gray(130)
+    }
+}
+
 fn vault_display(path: &std::path::Path) -> String {
     let s = path.to_string_lossy();
     if s.len() > 40 {
@@ -710,24 +928,28 @@ fn vault_display(path: &std::path::Path) -> String {
     }
 }
 
-fn icon(name: &str) -> String {
-    match egui_phosphor_icons::Icon::from_name(name) {
-        Some(i) => i.0.to_string(),
-        None => "\u{2022}".to_string(),
-    }
-}
-
 fn icon_button(ui: &mut Ui, name: &str, tooltip: &str) -> bool {
-    let btn = egui::Button::new(RichText::new(icon(name)).size(15.0)).small();
+    let btn = egui::Button::new(icon(name).size(15.0)).small();
     ui.add(btn).on_hover_text(tooltip).clicked()
 }
 
-fn configure_dark_theme(ctx: &egui::Context) {
+fn apply_theme(ctx: &egui::Context, dark: bool) {
     ctx.all_styles_mut(|style| {
-        style.visuals = egui::Visuals::dark();
-        style.visuals.panel_fill = Color32::from_gray(24);
-        style.visuals.extreme_bg_color = Color32::from_gray(18);
-        style.visuals.window_fill = Color32::from_gray(30);
-        style.visuals.widgets.inactive.bg_fill = Color32::from_gray(32);
+        if dark {
+            style.visuals = egui::Visuals::dark();
+            style.visuals.panel_fill = Color32::from_gray(24);
+            style.visuals.extreme_bg_color = Color32::from_gray(18);
+            style.visuals.window_fill = Color32::from_gray(30);
+        } else {
+            style.visuals = egui::Visuals::light();
+            style.visuals.panel_fill = Color32::from_gray(242);
+            style.visuals.extreme_bg_color = Color32::from_gray(255);
+            style.visuals.window_fill = Color32::from_gray(248);
+        }
+        style.visuals.widgets.inactive.bg_fill = if dark {
+            Color32::from_gray(32)
+        } else {
+            Color32::from_gray(225)
+        };
     });
 }

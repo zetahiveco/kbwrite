@@ -12,6 +12,12 @@ pub struct Settings {
     pub openai_model: String,
     #[serde(default)]
     pub openai_api_key: String,
+    #[serde(default = "default_true")]
+    pub dark_mode: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -21,6 +27,7 @@ impl Default for Settings {
             openai_base_url: "https://api.openai.com/v1".to_string(),
             openai_model: "gpt-4o-mini".to_string(),
             openai_api_key: String::new(),
+            dark_mode: true,
         }
     }
 }

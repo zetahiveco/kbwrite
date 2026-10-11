@@ -98,7 +98,7 @@ impl Editor {
         self.last_focused = Some(first_new);
     }
 
-    pub fn show(&mut self, ui: &mut Ui, modified: &mut bool, open_ai: &mut bool) {
+    pub fn show(&mut self, ui: &mut Ui, modified: &mut bool) {
         self.ate_key = false;
 
         // Handle slash-menu keyboard navigation before widgets consume keys.
@@ -160,7 +160,7 @@ impl Editor {
                 let gutter_width = 34.0;
                 if show_gutter {
                     let handle = egui::Button::new(
-                        RichText::new(icon("dots-six-vertical"))
+                        icon("dots-six-vertical")
                             .size(14.0)
                             .color(Color32::from_gray(120)),
                     )
@@ -173,9 +173,7 @@ impl Editor {
                         self.block_menu(block_id);
                     }
                     let add = egui::Button::new(
-                        RichText::new(icon("plus"))
-                            .size(14.0)
-                            .color(Color32::from_gray(120)),
+                        icon("plus").size(14.0).color(Color32::from_gray(120)),
                     )
                     .small();
                     if ui
@@ -429,8 +427,6 @@ impl Editor {
             }
         }
 
-        let _ = open_ai; // AI is triggered from the app toolbar; kept for symmetry.
-
         // Clicking on empty space below the content adds a new paragraph.
         let space_rect = ui.available_rect_before_wrap();
         let min_space = Vec2::new(space_rect.width(), 120.0);
@@ -481,18 +477,16 @@ impl Editor {
                                     } else {
                                         Color32::TRANSPARENT
                                     };
-                                    let resp = ui
-                                        .horizontal(|ui| {
-                                            let btn = egui::Button::new(RichText::new(format!(
-                                                "{}  {}",
-                                                icon(kind.icon_name()),
-                                                kind.label()
-                                            )).size(14.0))
-                                            .fill(bg)
-                                            .min_size(Vec2::new(ui.available_width() - 8.0, 24.0));
-                                            ui.add(btn)
-                                        })
-                                        .inner;
+                                    let job = icon_job(
+                                        kind.icon_name(),
+                                        kind.label(),
+                                        14.0,
+                                        Color32::from_gray(225),
+                                    );
+                                    let btn = egui::Button::new(job)
+                                        .fill(bg)
+                                        .min_size(Vec2::new(ui.available_width() - 8.0, 24.0));
+                                    let resp = ui.add(btn);
                                     if resp.clicked() {
                                         self.apply_slash(block_id, *kind);
                                     }
@@ -565,9 +559,28 @@ fn text_style_for(kind: BlockKind) -> egui::TextStyle {
     }
 }
 
-fn icon(name: &str) -> String {
+fn icon(name: &str) -> RichText {
     match egui_phosphor_icons::Icon::from_name(name) {
-        Some(i) => i.0.to_string(),
-        None => "\u{2022}".to_string(),
+        Some(i) => i.regular(),
+        None => RichText::new("\u{2022}"),
     }
+}
+
+/// Icon + text composed with the correct font families.
+fn icon_job(name: &str, text: &str, size: f32, color: Color32) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        &icon(name).text().to_string(),
+        4.0,
+        egui::TextFormat::simple(
+            egui::FontId::new(size, egui::FontFamily::Name("phosphor-regular".into())),
+            color,
+        ),
+    );
+    job.append(
+        text,
+        0.0,
+        egui::TextFormat::simple(egui::FontId::new(size, egui::FontFamily::Proportional), color),
+    );
+    job
 }

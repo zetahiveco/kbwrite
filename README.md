@@ -19,6 +19,8 @@ portable, diffable, and easy to back up.
   OpenRouter, …). Select a block, press `Cmd/Ctrl+I`, type an instruction like
   *"fix grammar"*, *"summarize"* or *"turn into bullets"* — the result is inserted right below.
 - **Phosphor icons** throughout, via [egui_phosphor_icons](https://docs.rs/egui_phosphor_icons/latest/egui_phosphor_icons/).
+- **Light & dark mode** — one-click theme switch in the sidebar.
+- **Editor / Raw tabs** — write in the block editor, or drop down to raw markdown anytime.
 - **Fast & native** — built with Rust and GPU rendering.
 
 ## Keyboard shortcuts
@@ -68,12 +70,9 @@ _Coming soon_
 
 ## License
 
-MIT
+MIT © Harish Deivanayagam
 
 ---
 
-<div align="center">
+Made by [harishdeivanayagam](https://github.com/harishdeivanayagam) · [zetahive.co](https://zetahive.co)
 
-**Built by [zetahive.co](https://zetahive.co) and [harishdeivanayagam](https://github.com/harishdeivanayagam)**
-
-</div>
