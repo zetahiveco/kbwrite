@@ -1,7 +1,8 @@
 //! Main application: sidebar, note list, editor, settings and AI windows.
 
 use crate::ai;
-use crate::editor::Editor;
+use crate::editor::{Editor, LinkCandidate};
+use crate::graph::GraphExplorer;
 use crate::settings::Settings;
 use crate::vault::{NoteMeta, TreeNode, Vault};
 use eframe::egui::{
@@ -154,6 +155,7 @@ fn icon_job(name: &str, text: &str, size: f32, color: Color32) -> egui::text::La
 enum ViewMode {
     Editor,
     Raw,
+    Graph,
 }
 
 pub struct KbWriteApp {
@@ -174,6 +176,11 @@ pub struct KbWriteApp {
 
     view: ViewMode,
     raw_text: String,
+
+    /// Obsidian-style graph explorer state.
+    graph: GraphExplorer,
+    /// Bumped whenever notes change on disk, so the graph can rebuild.
+    notes_version: u64,
 
     // Sidebar
     search: String,
@@ -227,6 +234,8 @@ impl KbWriteApp {
             dirty: false,
             view: ViewMode::Editor,
             raw_text: String::new(),
+            graph: GraphExplorer::new(),
+            notes_version: 0,
             search: String::new(),
             new_note_title: String::new(),
             creating_new_note: false,
@@ -265,6 +274,7 @@ impl KbWriteApp {
             self.notes = vault.list_notes();
             self.notes_tree = vault.tree();
         }
+        self.notes_version += 1;
     }
 
     /// Expand every folder (used on first load so all notes are visible).
@@ -411,6 +421,8 @@ impl KbWriteApp {
             let content = self.editor.to_markdown();
             if vault.write_note(&note.path, &content).is_ok() {
                 self.dirty = false;
+                // Links may have changed → let the graph rebuild.
+                self.notes_version += 1;
             }
         }
     }
@@ -1220,6 +1232,30 @@ impl KbWriteApp {
                             }
                         }
 
+                        // Graph view toggle (Obsidian-style graph explorer).
+                        if ui
+                            .add(egui::Button::new(icon_job(
+                                "graph",
+                                "Graph",
+                                13.0,
+                                if self.view == ViewMode::Graph {
+                                    accent(self.settings.dark_mode)
+                                } else {
+                                    normal_text(self.settings.dark_mode)
+                                },
+                            )))
+                            .on_hover_text("Graph view — see how notes link together")
+                            .clicked()
+                        {
+                            self.sync_raw_to_editor();
+                            self.raw_text.clear();
+                            self.view = if self.view == ViewMode::Graph {
+                                ViewMode::Editor
+                            } else {
+                                ViewMode::Graph
+                            };
+                        }
+
                         ui.label(
                             RichText::new("Type  /  for blocks")
                                 .size(11.5)
@@ -1250,7 +1286,16 @@ impl KbWriteApp {
                         ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                             ui.add_space(8.0);
                             let mut modified = false;
-                            self.editor.show(ui, &mut modified);
+                            let link_notes: Vec<LinkCandidate> = self
+                                .notes
+                                .iter()
+                                .map(|n| LinkCandidate {
+                                    title: n.title.clone(),
+                                    // Show/insert names without the ".md" suffix.
+                                    rel: n.rel.trim_end_matches(".md").to_string(),
+                                })
+                                .collect();
+                            self.editor.show(ui, &mut modified, &link_notes);
                             if modified {
                                 self.dirty = true;
                             }
@@ -1278,6 +1323,29 @@ impl KbWriteApp {
                         });
                         if modified_raw {
                             self.dirty = true;
+                        }
+                    }
+                    ViewMode::Graph => {
+                        let (nodes, links) = self.graph.stats();
+                        ui.label(
+                            RichText::new(format!(
+                                "Graph view — {nodes} notes, {links} links · click a node to open it · drag to pan · scroll to zoom"
+                            ))
+                            .size(11.0)
+                            .color(muted(self.settings.dark_mode)),
+                        );
+                        if let Some(vault) = self.vault.as_ref() {
+                            let current = self.current_note.as_ref().map(|n| n.path.clone());
+                            if let Some(path) = self.graph.show(
+                                ui,
+                                vault,
+                                &self.notes,
+                                self.notes_version,
+                                self.settings.dark_mode,
+                                current.as_deref(),
+                            ) {
+                                self.pending_open = Some(path);
+                            }
                         }
                     }
                 }
@@ -1483,7 +1551,7 @@ impl KbWriteApp {
         let toasts = self.toasts.clone();
         for (i, (msg, _)) in toasts.iter().enumerate() {
             egui::Area::new(egui::Id::new(("toast", i)))
-                .anchor(egui::Align2::RIGHT_TOP, [-16.0, 16.0 + 34.0 * i as f32])
+                .anchor(egui::Align2::RIGHT_BOTTOM, [-16.0, -(16.0 + 34.0 * i as f32)])
                 .order(egui::Order::Foreground)
                 .show(ctx, |ui| {
                     egui::Frame::popup(ui.style())

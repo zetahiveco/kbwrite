@@ -28,11 +28,70 @@ pub struct Editor {
     gutter_btn_rects: Vec<egui::Rect>,
     /// Set while a slash-menu key was consumed this frame.
     ate_key: bool,
+    /// Open "Link to note" file picker (searchable dropdown).
+    link_pick: Option<LinkPickState>,
+    /// Focus the picker's search field on the next frame.
+    link_focus_requested: bool,
+    /// True on the frame the picker was opened — its opening click must not
+    /// be treated as an "outside click" that closes it.
+    link_pick_fresh: bool,
 }
 
 struct SlashState {
     block_id: u64,
     selected: usize,
+}
+
+/// One entry in the "/" menu: a block kind, or the special "Link to note" action.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SlashEntry {
+    Kind(BlockKind),
+    Link,
+}
+
+impl SlashEntry {
+    fn label(&self) -> &'static str {
+        match self {
+            SlashEntry::Kind(k) => k.label(),
+            SlashEntry::Link => "Link to note",
+        }
+    }
+    fn icon_name(&self) -> &'static str {
+        match self {
+            SlashEntry::Kind(k) => k.icon_name(),
+            SlashEntry::Link => "link",
+        }
+    }
+    fn matches(&self, filter: &str) -> bool {
+        if filter.is_empty() {
+            return true;
+        }
+        if self.label().to_lowercase().contains(filter) {
+            return true;
+        }
+        let kws: &[&str] = match self {
+            SlashEntry::Kind(k) => k.keywords(),
+            SlashEntry::Link => &["link", "note", "page", "file", "wiki", "internal", "reference"],
+        };
+        kws.iter().any(|kw| kw.contains(filter) || filter.contains(kw))
+    }
+}
+
+/// Open "Link to note" picker state (dropdown with a search field).
+struct LinkPickState {
+    block_id: u64,
+    search: String,
+    selected: usize,
+    /// Last row index the list auto-scrolled to (avoid fighting the user's
+    /// own scrolling every frame).
+    scrolled_for: i64,
+}
+
+/// A note offered by the link picker.
+#[derive(Clone)]
+pub struct LinkCandidate {
+    pub title: String,
+    pub rel: String,
 }
 
 impl Editor {
@@ -50,6 +109,9 @@ impl Editor {
             select_drag: None,
             gutter_btn_rects: Vec::new(),
             ate_key: false,
+            link_pick: None,
+            link_focus_requested: false,
+            link_pick_fresh: false,
         };
         ed.blocks.push(Block::new(ed.next_id, BlockKind::Paragraph));
         ed.next_id += 1;
@@ -65,6 +127,7 @@ impl Editor {
         self.selected_blocks.clear();
         self.select_drag = None;
         self.row_rects.clear();
+        self.link_pick = None;
     }
 
     pub fn to_markdown(&self) -> String {
@@ -114,7 +177,7 @@ impl Editor {
         self.last_focused = Some(first_new);
     }
 
-    pub fn show(&mut self, ui: &mut Ui, modified: &mut bool) {
+    pub fn show(&mut self, ui: &mut Ui, modified: &mut bool, notes: &[LinkCandidate]) {
         self.ate_key = false;
         let cmd = |i: &egui::InputState| {
             if cfg!(target_os = "macos") {
@@ -170,10 +233,55 @@ impl Editor {
                 self.ate_key = true;
             } else if confirm {
                 let items = self.filtered_slash_items(slash.block_id);
-                if let Some(&kind) = items.get(slash.selected.min(items.len().saturating_sub(1))) {
-                    self.apply_slash(slash.block_id, kind);
+                if let Some(&entry) = items.get(slash.selected.min(items.len().saturating_sub(1))) {
+                    self.apply_slash_entry(slash.block_id, entry);
                 }
                 self.ate_key = true;
+            }
+        }
+
+        // Link-picker keyboard navigation (arrows/enter/escape). Skipped on the
+        // frame the picker was opened: the same Enter press that confirmed
+        // "Link to note" would otherwise immediately confirm row 0 too.
+        if !self.link_pick_fresh {
+            if let Some(pick) = self
+                .link_pick
+                .as_ref()
+                .map(|p| (p.block_id, p.search.clone(), p.selected))
+            {
+            let (block_id, search, selected) = pick;
+            let items = filter_candidates(&search, notes);
+            let count = items.len();
+            let input = ui.ctx().input(|i| {
+                (
+                    i.key_pressed(Key::ArrowDown),
+                    i.key_pressed(Key::ArrowUp),
+                    i.key_pressed(Key::Enter),
+                    i.key_pressed(Key::Escape),
+                )
+            });
+            let (down, up, confirm, close) = input;
+            if close {
+                self.link_pick = None;
+                self.ate_key = true;
+            } else if down && count > 0 {
+                if let Some(p) = self.link_pick.as_mut() {
+                    p.selected = (p.selected + 1) % count;
+                }
+                self.ate_key = true;
+            } else if up && count > 0 {
+                if let Some(p) = self.link_pick.as_mut() {
+                    p.selected = (p.selected + count - 1) % count;
+                }
+                self.ate_key = true;
+            } else if confirm {
+                let idx = selected.min(count.saturating_sub(1));
+                if let Some(c) = items.get(idx) {
+                    let title = c.title.clone();
+                    self.insert_link(block_id, &title, modified);
+                }
+                self.ate_key = true;
+            }
             }
         }
 
@@ -655,6 +763,16 @@ impl Editor {
             }
         }
 
+        // Render the link picker popup.
+        if let Some(pick) = &self.link_pick {
+            let block_id = pick.block_id;
+            if let Some(rect) = self.block_rects.get(&block_id).copied() {
+                self.render_link_picker(ui, block_id, rect, notes, modified);
+            } else {
+                self.link_pick = None;
+            }
+        }
+
         // Clicking on empty space below the content adds a new paragraph.
         let space_rect = ui.available_rect_before_wrap();
         let min_space = Vec2::new(space_rect.width(), 120.0);
@@ -719,11 +837,11 @@ impl Editor {
                         ScrollArea::vertical()
                             .max_height(280.0)
                             .show(ui, |ui| {
-                                for (i, kind) in items.iter().enumerate() {
+                                for (i, entry) in items.iter().enumerate() {
                                     let is_sel = i == selected.min(items.len().saturating_sub(1));
                                     let job = icon_job(
-                                        kind.icon_name(),
-                                        kind.label(),
+                                        entry.icon_name(),
+                                        entry.label(),
                                         14.0,
                                         text_col,
                                     );
@@ -732,7 +850,7 @@ impl Editor {
                                         .min_size(Vec2::new(menu_width - 8.0, 26.0));
                                     let resp = ui.add(btn);
                                     if resp.clicked() {
-                                        self.apply_slash(block_id, *kind);
+                                        self.apply_slash_entry(block_id, *entry);
                                     }
                                 }
                             });
@@ -740,24 +858,177 @@ impl Editor {
             });
     }
 
-    fn filtered_slash_items(&self, block_id: u64) -> Vec<BlockKind> {
+    fn filtered_slash_items(&self, block_id: u64) -> Vec<SlashEntry> {
         let filter = self
             .blocks
             .iter()
             .find(|b| b.id == block_id)
             .map(|b| b.text.trim_start_matches('/').trim().to_lowercase())
             .unwrap_or_default();
-        BlockKind::slash_menu_items()
+        let mut items: Vec<SlashEntry> = BlockKind::slash_menu_items()
             .iter()
-            .filter(|k| {
-                filter.is_empty()
-                    || k.label().to_lowercase().contains(&filter)
-                    || k.keywords()
-                        .iter()
-                        .any(|kw| kw.contains(&filter) || filter.contains(kw))
-            })
-            .copied()
-            .collect()
+            .map(|k| SlashEntry::Kind(*k))
+            .collect();
+        items.push(SlashEntry::Link);
+        items.retain(|e| e.matches(&filter));
+        items
+    }
+
+    fn apply_slash_entry(&mut self, block_id: u64, entry: SlashEntry) {
+        match entry {
+            SlashEntry::Kind(kind) => self.apply_slash(block_id, kind),
+            SlashEntry::Link => {
+                // Drop the "/" filter text, but keep anything typed before it.
+                if let Some(b) = self.blocks.iter_mut().find(|b| b.id == block_id) {
+                    if let Some(pos) = b.text.find('/') {
+                        b.text.truncate(pos);
+                    }
+                }
+                self.slash = None;
+                self.link_pick = Some(LinkPickState {
+                    block_id,
+                    search: String::new(),
+                    selected: 0,
+                    scrolled_for: i64::MIN,
+                });
+                self.link_focus_requested = true;
+                self.link_pick_fresh = true;
+                self.focus_block = None;
+            }
+        }
+    }
+
+    /// Insert a `[[wikilink]]` to the chosen note at the end of the block.
+    fn insert_link(&mut self, block_id: u64, title: &str, modified: &mut bool) {
+        let link = format!("[[{}]]", title);
+        if let Some(b) = self.blocks.iter_mut().find(|b| b.id == block_id) {
+            b.text.push_str(&link);
+        }
+        self.link_pick = None;
+        self.focus_block = Some(block_id);
+        self.last_focused = Some(block_id);
+        self.selected_blocks.clear();
+        *modified = true;
+    }
+
+    /// Searchable dropdown of vault notes, anchored below the block.
+    fn render_link_picker(
+        &mut self,
+        ui: &mut Ui,
+        block_id: u64,
+        rect: egui::Rect,
+        notes: &[LinkCandidate],
+        modified: &mut bool,
+    ) {
+        let dark = ui.visuals().dark_mode;
+        let (menu_fill, sel_fill, text_col, muted_col) = if dark {
+            (
+                Color32::from_gray(32),
+                Color32::from_rgb(45, 70, 110),
+                Color32::from_gray(225),
+                Color32::from_gray(130),
+            )
+        } else {
+            (
+                Color32::from_gray(252),
+                Color32::from_rgb(219, 233, 253),
+                Color32::from_gray(30),
+                Color32::from_gray(130),
+            )
+        };
+
+        let Some(pick) = self.link_pick.as_ref() else {
+            return;
+        };
+        let (search, selected, mut scrolled_for) =
+            (pick.search.clone(), pick.selected, pick.scrolled_for);
+        let filtered = filter_candidates(&search, notes);
+        // Skip the "click outside closes" check on the frame the picker was
+        // opened: the click on the slash-menu item is still being processed
+        // and would otherwise close the picker before it is ever visible.
+        let fresh = std::mem::take(&mut self.link_pick_fresh);
+
+        // Fixed popup width — the Area floats freely, so `available_width`
+        // would otherwise stretch it across the whole screen.
+        const PICKER_WIDTH: f32 = 300.0;
+
+        let mut search_str = search;
+        let mut picked: Option<String> = None;
+        let area_id = Id::new("link_picker").with(block_id);
+        let area = Area::new(area_id)
+            .fixed_pos(rect.left_bottom() + Vec2::new(0.0, 4.0))
+            .order(Order::Foreground)
+            .movable(false)
+            .show(ui.ctx(), |ui| {
+                Frame::popup(ui.style())
+                    .fill(menu_fill)
+                    .inner_margin(6.0)
+                    .corner_radius(8.0)
+                    .show(ui, |ui| {
+                        ui.set_width(PICKER_WIDTH);
+                        // Search field at the top of the dropdown.
+                        let resp = TextEdit::singleline(&mut search_str)
+                            .id(Id::new(("link_search", block_id)))
+                            .hint_text("Search notes…")
+                            .desired_width(PICKER_WIDTH - 14.0)
+                            .font(egui::TextStyle::Body)
+                            .show(ui);
+                        if self.link_focus_requested {
+                            resp.response.request_focus();
+                            self.link_focus_requested = false;
+                        }
+                        ui.separator();
+                        if filtered.is_empty() {
+                            ui.label(RichText::new("No matching notes").size(12.0).color(muted_col));
+                        } else {
+                            ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                                for (i, c) in filtered.iter().enumerate() {
+                                    let is_sel = i == selected.min(filtered.len() - 1);
+                                    let job = icon_job("file-text", &c.rel, 13.5, text_col);
+                                    let btn = egui::Button::new(job)
+                                        .fill(if is_sel {
+                                            sel_fill
+                                        } else {
+                                            Color32::TRANSPARENT
+                                        })
+                                        .min_size(Vec2::new(PICKER_WIDTH - 10.0, 26.0));
+                                    let resp = ui.add(btn);
+                                    // Ignore clicks on the opening frame: the
+                                    // click that selected "Link to note" in the
+                                    // slash menu is still active and would hit
+                                    // whichever row sits under the pointer.
+                                    if !fresh && resp.clicked() {
+                                        picked = Some(c.title.clone());
+                                    }
+                                    // Keep the keyboard-selected row in view.
+                                    if is_sel && scrolled_for != i as i64 {
+                                        resp.scroll_to_me(Some(egui::Align::Center));
+                                        scrolled_for = i as i64;
+                                    }
+                                }
+                            });
+                        }
+                    });
+            });
+        // Persist the search text + scroll position back into the picker state.
+        if let Some(p) = self.link_pick.as_mut() {
+            if p.block_id == block_id {
+                p.search = search_str;
+                p.scrolled_for = scrolled_for;
+            }
+        }
+        // Close when clicking anywhere outside the dropdown.
+        if !fresh && ui.input(|i| i.pointer.any_click()) {
+            if let Some(p) = ui.input(|i| i.pointer.latest_pos()) {
+                if !area.response.rect.contains(p) {
+                    self.link_pick = None;
+                    return;
+                }
+            }
+        }
+        if let Some(title) = picked {
+            self.insert_link(block_id, &title, modified);
+        }
     }
 
     fn apply_slash(&mut self, block_id: u64, kind: BlockKind) {
@@ -801,6 +1072,20 @@ fn text_style_for(kind: BlockKind) -> egui::TextStyle {
         BlockKind::Heading3 | BlockKind::Quote => egui::TextStyle::Body,
         _ => egui::TextStyle::Body,
     }
+}
+
+/// Filter link-picker candidates by title or vault-relative path.
+fn filter_candidates(query: &str, notes: &[LinkCandidate]) -> Vec<LinkCandidate> {
+    let q = query.trim().to_lowercase();
+    notes
+        .iter()
+        .filter(|c| {
+            q.is_empty()
+                || c.title.to_lowercase().contains(&q)
+                || c.rel.to_lowercase().contains(&q)
+        })
+        .cloned()
+        .collect()
 }
 
 fn icon(name: &str) -> RichText {
