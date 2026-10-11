@@ -1,0 +1,22 @@
+[package]
+name = "kbwrite"
+version = "0.1.0"
+edition = "2021"
+description = "A local-first knowledge base / note-taking app (Obsidian-style) built in Rust with egui."
+license = "MIT"
+repository = "https://github.com/zetahiveco/kbwrite"
+keywords = ["notes", "knowledge-base", "egui", "obsidian", "editor"]
+categories = ["text-editors"]
+
+[dependencies]
+eframe = "0.36"
+egui_phosphor_icons = "0.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
