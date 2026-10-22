@@ -4,14 +4,15 @@ use crate::settings::Settings;
 use crate::vault::{NoteMeta, TreeNode, Vault};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use tauri::State;
+use std::sync::{Arc, Mutex};
+use tauri::{Emitter, State};
 
-const WELCOME: &str = include_str!("welcome.md");
+pub(crate) const WELCOME: &str = include_str!("welcome.md");
 
 pub struct AppState {
-    pub settings: Mutex<Settings>,
-    pub vault: Mutex<VaultSlot>,
+    pub settings: Arc<Mutex<Settings>>,
+    pub vault: Arc<Mutex<VaultSlot>>,
+    pub mcp: Mutex<Option<crate::mcp::Running>>,
 }
 
 pub struct VaultSlot {
@@ -23,9 +24,6 @@ pub struct VaultSlot {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsDto {
     pub vault_path: String,
-    pub openai_base_url: String,
-    pub openai_model: String,
-    pub openai_api_key: String,
     pub dark_mode: bool,
 }
 
@@ -99,9 +97,6 @@ pub fn open_vault(path: &Path) -> (Option<Vault>, Option<String>) {
 fn settings_dto(settings: &Settings) -> SettingsDto {
     SettingsDto {
         vault_path: settings.vault_path.to_string_lossy().to_string(),
-        openai_base_url: settings.openai_base_url.clone(),
-        openai_model: settings.openai_model.clone(),
-        openai_api_key: settings.openai_api_key.clone(),
         dark_mode: settings.dark_mode,
     }
 }
@@ -165,7 +160,7 @@ fn vault_mut<'a>(
 
 /// Canonicalize `path` (or its parent, if it does not exist yet) and refuse
 /// anything that escapes the vault root, including through symlinks.
-fn ensure_inside(root: &Path, path: &Path) -> Result<(), String> {
+pub(crate) fn ensure_inside(root: &Path, path: &Path) -> Result<(), String> {
     let root = std::fs::canonicalize(root).map_err(|e| format!("vault path: {e}"))?;
     let check = if path.exists() {
         std::fs::canonicalize(path).map_err(|e| e.to_string())?
@@ -355,16 +350,7 @@ pub fn save_settings(state: State<'_, AppState>, settings: SettingsDto) -> Resul
     }
     let path_changed = next_path != current.vault_path;
     current.vault_path = next_path;
-    current.openai_base_url = settings.openai_base_url.trim().to_string();
-    current.openai_model = settings.openai_model.trim().to_string();
-    current.openai_api_key = settings.openai_api_key.trim().to_string();
     current.dark_mode = settings.dark_mode;
-    if current.openai_base_url.is_empty() {
-        current.openai_base_url = "https://api.openai.com/v1".into();
-    }
-    if current.openai_model.is_empty() {
-        current.openai_model = "gpt-4o-mini".into();
-    }
     current.save().map_err(|e| format!("{e:#}"))?;
 
     let mut slot = lock_vault(&state)?;
@@ -373,20 +359,6 @@ pub fn save_settings(state: State<'_, AppState>, settings: SettingsDto) -> Resul
         *slot = VaultSlot { vault, error };
     }
     Ok(snapshot(&current, &mut slot))
-}
-
-#[tauri::command]
-pub async fn ai_complete(
-    state: State<'_, AppState>,
-    instruction: String,
-    text: String,
-) -> Result<String, String> {
-    let settings = lock_settings(&state)?.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::ai::complete(&settings, &instruction, &text).map_err(|e| format!("{e:#}"))
-    })
-    .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -405,6 +377,52 @@ pub fn graph(state: State<'_, AppState>) -> Result<GraphDto, String> {
             .collect(),
         edges,
     })
+}
+
+fn mcp_view(running: bool) -> crate::mcp::Status {
+    crate::mcp::status(running)
+}
+
+fn mcp_alive(state: &AppState) -> Result<bool, String> {
+    let mut slot = state.mcp.lock().map_err(|e| e.to_string())?;
+    let alive = slot.as_ref().is_some_and(|server| server.alive());
+    if !alive {
+        if let Some(server) = slot.take() {
+            server.shutdown();
+        }
+    }
+    Ok(alive)
+}
+
+#[tauri::command]
+pub fn mcp_status(state: State<'_, AppState>) -> Result<crate::mcp::Status, String> {
+    Ok(mcp_view(mcp_alive(&state)?))
+}
+
+#[tauri::command]
+pub fn mcp_start(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<crate::mcp::Status, String> {
+    if mcp_alive(&state)? {
+        return Ok(mcp_view(true));
+    }
+    let running = crate::mcp::serve(crate::mcp::Deps {
+        settings: Arc::clone(&state.settings),
+        vault: Arc::clone(&state.vault),
+        on_change: Arc::new(move || {
+            let _ = app.emit("vault-changed", ());
+        }),
+    })?;
+    let mut slot = state.mcp.lock().map_err(|e| e.to_string())?;
+    *slot = Some(running);
+    Ok(mcp_view(true))
+}
+
+#[tauri::command]
+pub fn mcp_stop(state: State<'_, AppState>) -> Result<crate::mcp::Status, String> {
+    let server = state.mcp.lock().map_err(|e| e.to_string())?.take();
+    if let Some(server) = server {
+        server.shutdown();
+    }
+    Ok(mcp_view(false))
 }
 
 #[tauri::command]

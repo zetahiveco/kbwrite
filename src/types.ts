@@ -1,9 +1,17 @@
 export type Settings = {
   vaultPath: string;
-  openaiBaseUrl: string;
-  openaiModel: string;
-  openaiApiKey: string;
   darkMode: boolean;
+};
+
+export type McpClient = "claude" | "codex" | "opencode";
+
+export type McpStatus = {
+  running: boolean;
+  port: number;
+  url: string;
+  claude: string;
+  codex: string;
+  opencode: string;
 };
 
 export type NoteMeta = {

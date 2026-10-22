@@ -12,7 +12,7 @@ Source, issues, and downloads: [github.com/zetahiveco/kbwrite](https://github.co
 - **BlockNote editor** — type `/` for headings, lists, to-dos, quotes, code, tables, and more.
 - **Wikilinks** — `/` → **Link to note**, or type `[[Note]]` yourself.
 - **Graph view** — notes are nodes, `[[links]]` and local markdown links are edges.
-- **Inline AI** — works with any OpenAI-compatible endpoint (OpenAI, Ollama, LM Studio, OpenRouter, …). Press `Cmd/Ctrl+I`, type an instruction, and the result is inserted below the current block.
+- **MCP server** — start it in Settings, then connect Claude, Codex, or OpenCode so they can read and write the vault.
 - **Light and dark mode.**
 - **Raw markdown** — switch to the source whenever you want.
 - **File tree** — create, rename, and delete notes and folders.
@@ -23,7 +23,6 @@ Source, issues, and downloads: [github.com/zetahiveco/kbwrite](https://github.co
 | --- | --- |
 | `Cmd/Ctrl + N` | New note |
 | `Cmd/Ctrl + S` | Save note |
-| `Cmd/Ctrl + I` | Inline AI assist |
 | `Cmd/Ctrl + ,` | Settings |
 | `/` | Block menu |
 
@@ -50,7 +49,7 @@ npm run tauri build
 ### Configure
 
 - **Vault folder** — KbWrite creates a default vault at `~/Documents/KbWriteVault`. Change it in **Settings** (`Cmd/Ctrl+,`).
-- **Inline AI** — in Settings, paste your OpenAI-compatible **base URL**, **model**, and **API key**. For a local Ollama setup, use `http://localhost:11434/v1` with model `llama3.1`.
+- **MCP** — in Settings, press **Start**. Copy the command for Claude, Codex, or OpenCode and run it once. The server listens on `127.0.0.1:47321` only while KbWrite is open.
 
 Settings are stored in `~/.kbwrite/settings.json`. Existing settings files from earlier KbWrite versions still load.
 

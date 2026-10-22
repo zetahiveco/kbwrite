@@ -14,10 +14,6 @@ KbWrite is a local-first knowledge base. Your notes are plain markdown files in 
 Type `/` and choose **Link to note**, or write a wikilink yourself: `[[Welcome]]`.
 Open **Graph** to see how notes connect.
 
-## Inline AI
+## MCP
 
-1. Open Settings and add an OpenAI-compatible base URL, model, and API key
-   (OpenAI, Ollama, LM Studio, OpenRouter, and others).
-2. Press `Cmd/Ctrl+I` or click **AI Assist**.
-3. Ask for something like "Fix grammar" or "Turn into bullets".
-   The result is inserted below the block you were editing.
+Settings can start an MCP server for Claude, Codex, and OpenCode. They can then read and write the notes in this vault.

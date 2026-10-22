@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { BlockNoteEditor } from "@blocknote/core";
 import {
@@ -9,12 +10,10 @@ import {
   Moon,
   NoteBlank,
   PencilSimple,
-  Sparkle,
   Sun,
   Trash,
 } from "@phosphor-icons/react";
 import {
-  aiComplete,
   createFile,
   createFolder,
   deletePath,
@@ -28,7 +27,6 @@ import {
   saveSettings,
   writeNote,
 } from "./api";
-import { AiDialog } from "./components/AiDialog";
 import { Dialog } from "./components/Dialog";
 import { GraphView } from "./components/GraphView";
 import { NoteEditor } from "./components/NoteEditor";
@@ -49,10 +47,6 @@ export function App() {
   const [view, setView] = useState<ViewMode>("editor");
   const [editorKey, setEditorKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAi, setShowAi] = useState(false);
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiResult, setAiResult] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -202,6 +196,62 @@ export function App() {
     document.documentElement.dataset.theme = settings?.darkMode === false ? "light" : "dark";
   }, [settings?.darkMode]);
 
+  const reloadExternal = useCallback(async () => {
+    try {
+      const loaded = await getSnapshot();
+      setSnap(loaded);
+      setSettings(loaded.settings);
+      const path = currentPathRef.current;
+      if (!path) return;
+      const still = loaded.notes.some((note) => note.path === path);
+      if (!still) {
+        const next = loaded.notes[0];
+        if (!next) {
+          currentPathRef.current = null;
+          markdownRef.current = "";
+          dirtyRef.current = false;
+          setCurrentPath(null);
+          setMarkdown("");
+          setDirty(false);
+          return;
+        }
+        const content = await readNote(next.path);
+        currentPathRef.current = next.path;
+        markdownRef.current = content;
+        dirtyRef.current = false;
+        setCurrentPath(next.path);
+        setMarkdown(content);
+        setDirty(false);
+        setEditorKey((key) => key + 1);
+        return;
+      }
+      if (dirtyRef.current) return;
+      const content = await readNote(path);
+      if (content !== markdownRef.current) {
+        markdownRef.current = content;
+        setMarkdown(content);
+        setEditorKey((key) => key + 1);
+      }
+    } catch (error) {
+      toast(errorMessage(error));
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void listen("vault-changed", () => {
+      void reloadExternal();
+    }).then((stop) => {
+      if (cancelled) stop();
+      else unlisten = stop;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [reloadExternal]);
+
   useEffect(() => {
     const note = snap?.notes.find((item) => item.path === currentPath);
     const title = note ? `KbWrite — ${note.title}` : "KbWrite";
@@ -255,9 +305,6 @@ export function App() {
       } else if (key === "n") {
         event.preventDefault();
         actions.current.newFile();
-      } else if (key === "i") {
-        event.preventDefault();
-        if (currentPathRef.current) setShowAi(true);
       } else if (key === ",") {
         event.preventDefault();
         actions.current.toggleSettings();
@@ -312,61 +359,6 @@ export function App() {
       if (updated.notes[0]) await openNote(updated.notes[0].path, false);
     } catch (error) {
       toast(errorMessage(error));
-    }
-  }
-
-  async function targetText() {
-    const editor = editorRef.current;
-    if (viewRef.current === "editor" && editor) {
-      const selection = editor.getSelection();
-      if (selection && selection.blocks.length > 0) {
-        const selected = await editor.blocksToMarkdownLossy(selection.blocks);
-        if (selected.trim()) return selected;
-      }
-      const cursor = editor.getTextCursorPosition();
-      const block = await editor.blocksToMarkdownLossy([cursor.block]);
-      if (block.trim()) return block;
-    }
-    if (viewRef.current === "raw" && rawRef.current) {
-      const field = rawRef.current;
-      const selected = field.value.slice(field.selectionStart, field.selectionEnd);
-      if (selected.trim()) return selected;
-    }
-    return markdownRef.current;
-  }
-
-  async function insertResult(result: string) {
-    const editor = editorRef.current;
-    if (viewRef.current === "editor" && editor) {
-      const blocks = await editor.tryParseMarkdownToBlocks(result);
-      if (blocks.length > 0) {
-        const cursor = editor.getTextCursorPosition();
-        editor.insertBlocks(blocks, cursor.block, "after");
-      }
-      const content = await editor.blocksToMarkdownLossy(editor.document);
-      markDirty(content);
-      return;
-    }
-    const next = `${markdownRef.current.replace(/\s*$/, "")}\n\n${result.trim()}\n`;
-    markDirty(next);
-  }
-
-  async function runAi(instruction: string) {
-    setAiBusy(true);
-    setAiError(null);
-    try {
-      const text = (await targetText()).trim();
-      if (!text) {
-        setAiError("There is no text to work on. Write something first.");
-        return;
-      }
-      const result = await aiComplete(instruction, text);
-      setAiResult(result);
-      await insertResult(result);
-    } catch (error) {
-      setAiError(errorMessage(error));
-    } finally {
-      setAiBusy(false);
     }
   }
 
@@ -564,19 +556,6 @@ export function App() {
             </button>
             <button
               type="button"
-              className="text-btn"
-              title="Inline AI (Cmd/Ctrl+I)"
-              disabled={!currentNote}
-              onClick={() => {
-                setAiError(null);
-                setAiResult("");
-                setShowAi(true);
-              }}
-            >
-              <Sparkle size={14} /> AI Assist
-            </button>
-            <button
-              type="button"
               className="icon-btn"
               title="Delete this note"
               disabled={!currentNote}
@@ -652,17 +631,6 @@ export function App() {
           onClose={() => setShowSettings(false)}
           onSave={applySettings}
           onToggleTheme={() => void toggleTheme()}
-        />
-      )}
-      {showAi && (
-        <AiDialog
-          model={settings.openaiModel}
-          noteTitle={currentNote?.title ?? ""}
-          busy={aiBusy}
-          error={aiError}
-          result={aiResult}
-          onClose={() => setShowAi(false)}
-          onRun={(instruction) => void runAi(instruction)}
         />
       )}
       {pendingDelete && (

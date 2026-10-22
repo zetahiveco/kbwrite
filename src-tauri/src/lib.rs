@@ -1,10 +1,10 @@
-mod ai;
 mod commands;
 mod graph;
+mod mcp;
 mod settings;
 mod vault;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub fn run() {
     let settings = settings::Settings::load();
@@ -13,8 +13,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(commands::AppState {
-            settings: Mutex::new(settings),
-            vault: Mutex::new(commands::VaultSlot { vault, error }),
+            settings: Arc::new(Mutex::new(settings)),
+            vault: Arc::new(Mutex::new(commands::VaultSlot { vault, error })),
+            mcp: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_snapshot,
@@ -26,7 +27,9 @@ pub fn run() {
             commands::rename_path,
             commands::delete_path,
             commands::save_settings,
-            commands::ai_complete,
+            commands::mcp_status,
+            commands::mcp_start,
+            commands::mcp_stop,
             commands::graph,
             commands::open_privacy_settings,
         ])

@@ -379,7 +379,32 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
-.dialog-wide { width: min(520px, calc(100vw - 32px)); }
+.dialog-wide { width: min(640px, calc(100vw - 32px)); }
+
+.mcp-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.dialog .segmented { margin-top: 8px; }
+
+.mcp-cmd {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mcp-copy { margin-top: 8px; }
 
 .dialog-head { justify-content: space-between; margin-bottom: 8px; }
 .dialog h2 { margin: 0; font-size: 16px; }
@@ -423,18 +448,6 @@ button.danger {
 .link-list { max-height: 280px; overflow: auto; margin-top: 8px; }
 .link-row { justify-content: space-between; border-radius: 8px; }
 .link-row small { color: var(--muted); }
-
-.ai-result {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
-.ai-result pre {
-  white-space: pre-wrap;
-  font-family: inherit;
-  margin: 0;
-}
 
 .context-menu {
   position: fixed;

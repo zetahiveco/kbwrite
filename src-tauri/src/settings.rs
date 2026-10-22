@@ -1,4 +1,4 @@
-//! Settings persistence (vault path + OpenAI-compatible inline AI config).
+//! Settings persistence (vault path and appearance).
 //!
 //! The on-disk shape stays snake_case so existing `~/.kbwrite/settings.json`
 //! files keep working.
@@ -10,11 +10,6 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub vault_path: PathBuf,
-    /// Base URL of an OpenAI-compatible API, e.g. https://api.openai.com/v1
-    pub openai_base_url: String,
-    pub openai_model: String,
-    #[serde(default)]
-    pub openai_api_key: String,
     #[serde(default = "default_true")]
     pub dark_mode: bool,
 }
@@ -27,9 +22,6 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             vault_path: default_vault_path(),
-            openai_base_url: "https://api.openai.com/v1".to_string(),
-            openai_model: "gpt-4o-mini".to_string(),
-            openai_api_key: String::new(),
             dark_mode: true,
         }
     }

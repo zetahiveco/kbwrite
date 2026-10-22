@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { GraphData, Mutation, Settings, Snapshot } from "./types";
+import type { GraphData, McpStatus, Mutation, Settings, Snapshot } from "./types";
 
 export function getSnapshot(): Promise<Snapshot> {
   return invoke("get_snapshot");
@@ -37,8 +37,16 @@ export function saveSettings(settings: Settings): Promise<Snapshot> {
   return invoke("save_settings", { settings });
 }
 
-export function aiComplete(instruction: string, text: string): Promise<string> {
-  return invoke("ai_complete", { instruction, text });
+export function mcpStatus(): Promise<McpStatus> {
+  return invoke("mcp_status");
+}
+
+export function mcpStart(): Promise<McpStatus> {
+  return invoke("mcp_start");
+}
+
+export function mcpStop(): Promise<McpStatus> {
+  return invoke("mcp_stop");
 }
 
 export function graph(): Promise<GraphData> {
