@@ -53,6 +53,6 @@ jobs:
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.run_id) }}
           releaseName: ${{ github.ref_type == 'tag' && format('KbWrite {0}', github.ref_name) || format('KbWrite manual {0}', github.run_id) }}
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
