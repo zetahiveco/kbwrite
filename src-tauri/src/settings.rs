@@ -1,4 +1,7 @@
 //! Settings persistence (vault path + OpenAI-compatible inline AI config).
+//!
+//! The on-disk shape stays snake_case so existing `~/.kbwrite/settings.json`
+//! files keep working.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -47,9 +50,7 @@ fn default_vault_path() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home)
-        .join("Documents")
-        .join("KbWriteVault")
+    PathBuf::from(home).join("Documents").join("KbWriteVault")
 }
 
 impl Settings {

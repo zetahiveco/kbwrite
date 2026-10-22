@@ -33,21 +33,16 @@ pub struct TreeNode {
 impl Vault {
     pub fn open(root: &Path) -> Result<Self> {
         std::fs::create_dir_all(root)?;
-        // Probe writability once so problems surface immediately.
         let probe = root.join(".kbwrite-write-test");
         let mut permission_denied = false;
-        match std::fs::write(&probe, b"ok")
-            .map(|_| std::fs::remove_file(&probe))
-        {
+        match std::fs::write(&probe, b"ok").map(|_| std::fs::remove_file(&probe)) {
             Ok(_) => {}
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
                     permission_denied = true;
                 }
                 eprintln!(
-                    "[kbwrite] WARNING: vault at {} is not writable: {e} \
-                     (If you launched via the Cursor terminal, the app may be sandboxed — \
-                     run from a regular terminal instead.)",
+                    "[kbwrite] WARNING: vault at {} is not writable: {e}",
                     root.display()
                 );
             }
@@ -59,13 +54,15 @@ impl Vault {
         })
     }
 
-    /// Recursively list all `.md` notes in the vault.
-    pub fn list_notes(&mut self) -> Vec<NoteMeta> {
-        let mut notes = Vec::new();
+    /// Walk the vault once and return notes plus the folder tree.
+    pub fn load(&mut self) -> (Vec<NoteMeta>, Vec<TreeNode>) {
         self.walk_errors.clear();
         self.permission_denied = false;
         let root = self.root.clone();
-        self.walk(&root, &mut notes);
+        let mut tree = Vec::new();
+        self.build_tree(&root, &mut tree);
+        let mut notes = Vec::new();
+        flatten(&tree, &self.root, &mut notes);
         notes.sort_by(|a, b| a.rel.to_lowercase().cmp(&b.rel.to_lowercase()));
         eprintln!(
             "[kbwrite] vault {}: {} notes found{}",
@@ -77,10 +74,10 @@ impl Vault {
                 format!(" (errors: {:?})", self.walk_errors)
             }
         );
-        notes
+        (notes, tree)
     }
 
-    fn walk(&mut self, dir: &Path, notes: &mut Vec<NoteMeta>) {
+    fn build_tree(&mut self, dir: &Path, out: &mut Vec<TreeNode>) {
         let entries = match std::fs::read_dir(dir) {
             Ok(entries) => entries,
             Err(e) => {
@@ -94,27 +91,33 @@ impl Vault {
         };
         for entry in entries.flatten() {
             let path = entry.path();
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
+            let name = entry.file_name().to_string_lossy().to_string();
             if name.starts_with('.') {
-                continue; // hidden files / folders
+                continue;
             }
             if path.is_dir() {
-                self.walk(&path, notes);
+                let mut children = Vec::new();
+                self.build_tree(&path, &mut children);
+                out.push(TreeNode {
+                    name,
+                    path,
+                    is_dir: true,
+                    children,
+                });
             } else if path.extension().map(|e| e == "md").unwrap_or(false) {
-                let rel = path
-                    .strip_prefix(&self.root)
-                    .unwrap_or(&path)
-                    .to_string_lossy()
-                    .to_string();
-                let title = path
-                    .file_stem()
-                    .map(|s| s.to_string_lossy())
-                    .unwrap_or_else(|| name.to_owned())
-                    .to_string();
-                notes.push(NoteMeta { path, rel, title });
+                out.push(TreeNode {
+                    name,
+                    path,
+                    is_dir: false,
+                    children: Vec::new(),
+                });
             }
         }
+        out.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
     }
 
     pub fn read_note(&self, path: &Path) -> Result<String> {
@@ -156,60 +159,12 @@ impl Vault {
             .unwrap_or(&path)
             .to_string_lossy()
             .to_string();
-        let title = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let title = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         Ok(NoteMeta { path, rel, title })
-    }
-
-    /// Build the full file tree (folders + `.md` files, folders first).
-    pub fn tree(&mut self) -> Vec<TreeNode> {
-        let root = self.root.clone();
-        let mut nodes = Vec::new();
-        self.build_tree(&root, &root, &mut nodes);
-        nodes
-    }
-
-    fn build_tree(&mut self, dir: &Path, root: &Path, out: &mut Vec<TreeNode>) {
-        let entries = match std::fs::read_dir(dir) {
-            Ok(entries) => entries,
-            Err(e) => {
-                if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    self.permission_denied = true;
-                }
-                self.walk_errors
-                    .push(format!("cannot read {}: {e}", dir.display()));
-                return;
-            }
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') {
-                continue; // hidden files / folders
-            }
-            if path.is_dir() {
-                let mut children = Vec::new();
-                self.build_tree(&path, root, &mut children);
-                out.push(TreeNode {
-                    name,
-                    path,
-                    is_dir: true,
-                    children,
-                });
-            } else if path.extension().map(|e| e == "md").unwrap_or(false) {
-                out.push(TreeNode {
-                    name,
-                    path,
-                    is_dir: false,
-                    children: Vec::new(),
-                });
-            }
-        }
-        // Folders first, then files, both alphabetically (case-insensitive).
-        out.sort_by(|a, b| {
-            b.is_dir
-                .cmp(&a.is_dir)
-                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-        });
     }
 
     /// Create an empty file, failing if it already exists.
@@ -251,6 +206,31 @@ impl Vault {
             Ok(std::fs::remove_dir_all(path)?)
         } else {
             Ok(std::fs::remove_file(path)?)
+        }
+    }
+}
+
+fn flatten(nodes: &[TreeNode], root: &Path, out: &mut Vec<NoteMeta>) {
+    for n in nodes {
+        if n.is_dir {
+            flatten(&n.children, root, out);
+        } else {
+            let rel = n
+                .path
+                .strip_prefix(root)
+                .unwrap_or(&n.path)
+                .to_string_lossy()
+                .to_string();
+            let title = n
+                .path
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| n.name.clone());
+            out.push(NoteMeta {
+                path: n.path.clone(),
+                rel,
+                title,
+            });
         }
     }
 }
