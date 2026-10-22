@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
+import {
+  BlockNoteSchema,
+  FilePanelExtension,
+  FormattingToolbarExtension,
+  defaultBlockSpecs,
+  insertOrUpdateBlockForSlashMenu,
+  type BlockNoteEditor,
+} from "@blocknote/core";
 import { filterSuggestionItems } from "@blocknote/core/extensions";
 import { BlockNoteView } from "@blocknote/mantine";
 import {
@@ -8,14 +16,27 @@ import {
   useEditorChange,
   type DefaultReactSuggestionItem,
 } from "@blocknote/react";
-import type { BlockNoteEditor } from "@blocknote/core";
-import { LinkSimple } from "@phosphor-icons/react";
+import { FileCsv, FileDoc, FilePdf, FileXls, LinkSimple } from "@phosphor-icons/react";
+import { saveMedia } from "../api";
+import { fileToBase64, mediaKind, restoreMediaMarkdown, displayUrl } from "../media";
 import type { NoteMeta } from "../types";
 import { Dialog } from "./Dialog";
+import { csvBlock, docxBlock, pdfBlock, xlsxBlock } from "./mediaBlocks";
 
-const HIDDEN_SLASH = new Set(["Image", "Video", "Audio", "File"]);
+const HIDDEN_SLASH = new Set(["File"]);
+
+const schema = BlockNoteSchema.create({
+  blockSpecs: {
+    ...defaultBlockSpecs,
+    pdf: pdfBlock(),
+    csv: csvBlock(),
+    docx: docxBlock(),
+    xlsx: xlsxBlock(),
+  },
+});
 
 export function NoteEditor({
+  notePath,
   initialMarkdown,
   dark,
   fullWidth,
@@ -24,15 +45,29 @@ export function NoteEditor({
   onEditor,
   onError,
 }: {
+  notePath: string;
   initialMarkdown: string;
   dark: boolean;
   fullWidth: boolean;
   notes: NoteMeta[];
   onMarkdown: (markdown: string) => void;
-  onEditor: (editor: BlockNoteEditor | null) => void;
+  onEditor: (editor: BlockNoteEditor<any, any, any> | null) => void;
   onError: (message: string) => void;
 }) {
-  const editor = useCreateBlockNote();
+  const editor = useCreateBlockNote({
+    schema,
+    uploadFile: async (file) => {
+      if (!mediaKind(file.name)) {
+        throw new Error("Use an image, PDF, CSV, DOCX, XLSX, video, or audio file.");
+      }
+      if (file.size > 80 * 1024 * 1024) {
+        throw new Error("Files must be 80 MB or smaller.");
+      }
+      const url = await saveMedia(notePath, file.name, await fileToBase64(file));
+      return { props: { url, name: file.name } };
+    },
+    resolveFileUrl: async (url) => displayUrl(url),
+  });
   const initialRef = useRef(initialMarkdown);
   const hydrating = useRef(true);
   const onMarkdownRef = useRef(onMarkdown);
@@ -51,7 +86,9 @@ export function NoteEditor({
     let cancelled = false;
     (async () => {
       try {
-        const blocks = await editor.tryParseMarkdownToBlocks(initialRef.current || "");
+        const blocks = await editor.tryParseMarkdownToBlocks(
+          restoreMediaMarkdown(initialRef.current || ""),
+        );
         if (cancelled) return;
         if (blocks.length > 0) {
           editor.replaceBlocks(editor.document, blocks);
@@ -90,6 +127,7 @@ export function NoteEditor({
                   (item) => !HIDDEN_SLASH.has(item.title),
                 ),
                 linkItem(() => setLinkOpen(true)),
+                ...documentItems(editor),
               ],
               query,
             )
@@ -108,6 +146,37 @@ export function NoteEditor({
       )}
     </div>
   );
+}
+
+function documentItems(editor: BlockNoteEditor<any, any, any>): DefaultReactSuggestionItem[] {
+  return [
+    documentItem(editor, "pdf", "PDF", "Embed a PDF", ["pdf", "document"], <FilePdf size={18} />),
+    documentItem(editor, "csv", "CSV", "Embed a spreadsheet of rows", ["csv", "table", "sheet"], <FileCsv size={18} />),
+    documentItem(editor, "docx", "DOCX", "Embed a Word document", ["docx", "word", "doc"], <FileDoc size={18} />),
+    documentItem(editor, "xlsx", "XLSX", "Embed an Excel workbook", ["xlsx", "excel", "sheet"], <FileXls size={18} />),
+  ];
+}
+
+function documentItem(
+  editor: BlockNoteEditor<any, any, any>,
+  type: "pdf" | "csv" | "docx" | "xlsx",
+  title: string,
+  subtext: string,
+  aliases: string[],
+  icon: ReactElement,
+): DefaultReactSuggestionItem {
+  return {
+    title,
+    subtext,
+    aliases,
+    group: "Media",
+    icon,
+    onItemClick: () => {
+      const inserted = insertOrUpdateBlockForSlashMenu(editor, { type });
+      editor.getExtension(FilePanelExtension)?.showMenu(inserted.id);
+      editor.getExtension(FormattingToolbarExtension)?.store.setState(false);
+    },
+  };
 }
 
 function linkItem(onPick: () => void): DefaultReactSuggestionItem {

@@ -1,7 +1,7 @@
 {
   "name": "kbwrite",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Local-first knowledge base. React and BlockNote in a Tauri app, with markdown notes on disk.",
   "homepage": "https://github.com/zetahiveco/kbwrite",
   "repository": {

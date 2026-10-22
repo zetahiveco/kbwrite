@@ -57,7 +57,7 @@ export function App() {
   const dirtyRef = useRef(false);
   const currentPathRef = useRef<string | null>(null);
   const viewRef = useRef<ViewMode>("editor");
-  const editorRef = useRef<BlockNoteEditor | null>(null);
+  const editorRef = useRef<BlockNoteEditor<any, any, any> | null>(null);
   const rawRef = useRef<HTMLTextAreaElement>(null);
   const saveQueue = useRef(Promise.resolve());
   const saveTimer = useRef<number | null>(null);
@@ -77,7 +77,7 @@ export function App() {
     }, 4000);
   }, []);
 
-  const onEditor = useCallback((editor: BlockNoteEditor | null) => {
+  const onEditor = useCallback((editor: BlockNoteEditor<any, any, any> | null) => {
     editorRef.current = editor;
   }, []);
 
@@ -587,6 +587,7 @@ export function App() {
         {currentNote && view === "editor" && (
           <NoteEditor
             key={`${currentPath}:${editorKey}`}
+            notePath={currentPath ?? ""}
             initialMarkdown={markdown}
             dark={settings.darkMode}
             fullWidth={fullWidth}

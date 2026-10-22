@@ -9,7 +9,7 @@ Source, issues, and downloads: [github.com/zetahiveco/kbwrite](https://github.co
 ## Features
 
 - **Markdown vault** — every note is a `.md` file on disk. Point KbWrite at any folder.
-- **BlockNote editor** — type `/` for headings, lists, to-dos, quotes, code, tables, and more.
+- **BlockNote editor** — type `/` for headings, lists, to-dos, quotes, code, tables, images, video, audio, PDF, CSV, DOCX, and XLSX. Those files are stored in the vault.
 - **Wikilinks** — `/` → **Link to note**, or type `[[Note]]` yourself.
 - **Graph view** — notes are nodes, `[[links]]` and local markdown links are edges.
 - **MCP server** — start it in Settings, then connect Claude, Codex, or OpenCode so they can read and write the vault.

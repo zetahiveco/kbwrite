@@ -426,6 +426,26 @@ pub fn mcp_stop(state: State<'_, AppState>) -> Result<crate::mcp::Status, String
 }
 
 #[tauri::command]
+pub fn save_media(
+    state: State<'_, AppState>,
+    note_path: String,
+    name: String,
+    data_base64: String,
+) -> Result<String, String> {
+    crate::media::save(&state, &note_path, &name, &data_base64)
+}
+
+#[tauri::command]
+pub fn read_media_text(state: State<'_, AppState>, url: String) -> Result<String, String> {
+    crate::media::read_text(&state, &url)
+}
+
+#[tauri::command]
+pub fn open_media(state: State<'_, AppState>, url: String) -> Result<(), String> {
+    crate::media::open(&state, &url)
+}
+
+#[tauri::command]
 pub fn open_privacy_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {

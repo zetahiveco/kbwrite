@@ -57,6 +57,18 @@ export function openPrivacySettings(): Promise<void> {
   return invoke("open_privacy_settings");
 }
 
+export function saveMedia(notePath: string, name: string, dataBase64: string): Promise<string> {
+  return invoke("save_media", { notePath, name, dataBase64 });
+}
+
+export function readMediaText(url: string): Promise<string> {
+  return invoke("read_media_text", { url });
+}
+
+export function openMedia(url: string): Promise<void> {
+  return invoke("open_media", { url });
+}
+
 export function errorMessage(error: unknown): string {
   if (typeof error === "string") return error;
   if (error instanceof Error && error.message) return error.message;
