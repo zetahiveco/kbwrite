@@ -26,12 +26,40 @@ Source, issues, and downloads: [github.com/zetahiveco/kbwrite](https://github.co
 | `Cmd/Ctrl + ,` | Settings |
 | `/` | Block menu |
 
+## Install
+
+One command installs the latest release. You can also download a build from
+[Releases](https://github.com/zetahiveco/kbwrite/releases).
+
+### macOS
+
+Apple silicon and Intel are detected. The app is copied into `/Applications`, or `~/Applications` if that folder is not writable.
+
+```bash
+curl -fsSL https://kbwrite.vercel.app/install.sh | sh
+```
+
+### Linux
+
+Installs an AppImage to `~/.local/bin/kbwrite`. If the release only has a `.deb`, the script installs that package instead (sudo may ask for a password).
+
+```bash
+curl -fsSL https://kbwrite.vercel.app/install.sh | sh
+```
+
+If `kbwrite` is not found, add `~/.local/bin` to your `PATH`.
+
+### Windows
+
+In PowerShell:
+
+```powershell
+irm https://kbwrite.vercel.app/install.ps1 | iex
+```
+
+This downloads the latest installer and opens it. x64 and ARM64 are detected.
+
 ## Getting started
-
-### Download
-
-Prebuilt apps for macOS, Windows, and Linux are on the
-[Releases](https://github.com/zetahiveco/kbwrite/releases) page.
 
 ### Build from source
 

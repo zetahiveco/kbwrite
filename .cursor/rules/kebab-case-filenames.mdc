@@ -1,0 +1,26 @@
+---
+description: TypeScript and TSX filenames use kebab-case
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript filenames
+
+Name every `.ts` and `.tsx` file in kebab-case. Keep exported components and types in PascalCase.
+
+```ts
+import { NoteEditor } from "./note-editor";
+```
+
+```text
+src/components/note-editor.tsx
+src/components/settings-dialog.tsx
+src/wikilink-inline.tsx
+src/dialog.tsx
+src/vite-env.d.ts
+```
+
+- Use lowercase words separated by hyphens: `media-blocks.tsx`, `graph-view.tsx`.
+- A single word stays lowercase: `api.ts`, `main.tsx`.
+- The import path matches the filename.
+- Rename with `git mv`. On a case-insensitive disk, move through a temporary name (`Dialog.tsx` → `dialog-file.tsx` → `dialog.tsx`).

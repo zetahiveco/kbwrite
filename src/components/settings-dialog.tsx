@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Moon, Sun } from "@phosphor-icons/react";
 import { errorMessage, mcpStart, mcpStatus, mcpStop } from "../api";
 import type { McpClient, McpStatus, Settings } from "../types";
-import { Dialog } from "./Dialog";
+import { Dialog } from "./dialog";
 
 const CLIENTS: { id: McpClient; label: string }[] = [
   { id: "claude", label: "Claude" },

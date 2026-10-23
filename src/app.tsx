@@ -29,11 +29,11 @@ import {
   saveSettings,
   writeNote,
 } from "./api";
-import { Dialog } from "./components/Dialog";
-import { GraphView } from "./components/GraphView";
-import { NoteEditor } from "./components/NoteEditor";
-import { SettingsDialog } from "./components/SettingsDialog";
-import { Sidebar } from "./components/Sidebar";
+import { Dialog } from "./components/dialog";
+import { GraphView } from "./components/graph-view";
+import { NoteEditor } from "./components/note-editor";
+import { SettingsDialog } from "./components/settings-dialog";
+import { Sidebar } from "./components/sidebar";
 import type { GraphData, Settings, Snapshot, ViewMode } from "./types";
 
 type Toast = { id: number; message: string };

@@ -21,9 +21,9 @@ import { saveMedia } from "../api";
 import { fileToBase64, mediaKind, restoreMediaMarkdown, displayUrl } from "../media";
 import type { NoteMeta } from "../types";
 import { expandWikilinks, findNotePath } from "../wikilink";
-import { inlineContentSpecs, openWikilink, wikilinkExtension } from "../wikilinkInline";
-import { Dialog } from "./Dialog";
-import { csvBlock, docxBlock, pdfBlock, xlsxBlock } from "./mediaBlocks";
+import { inlineContentSpecs, openWikilink, wikilinkExtension } from "../wikilink-inline";
+import { Dialog } from "./dialog";
+import { csvBlock, docxBlock, pdfBlock, xlsxBlock } from "./media-blocks";
 
 const HIDDEN_SLASH = new Set(["File"]);
 
