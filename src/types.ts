@@ -52,3 +52,20 @@ export type GraphData = {
 };
 
 export type ViewMode = "editor" | "raw" | "graph";
+
+export type PluginCommand = {
+  id: string;
+  name: string;
+};
+
+export type PluginInfo = {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  authors: string;
+  enabled: boolean;
+  loaded: boolean;
+  error: string | null;
+  commands: PluginCommand[];
+};

@@ -1,8 +1,19 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Moon, Sun } from "@phosphor-icons/react";
-import { errorMessage, mcpStart, mcpStatus, mcpStop } from "../api";
-import type { McpClient, McpStatus, Settings } from "../types";
+import {
+  errorMessage,
+  installPluginFolder,
+  installPluginGithub,
+  listPlugins,
+  mcpStart,
+  mcpStatus,
+  mcpStop,
+  removePlugin,
+  runPluginCommand,
+  setPluginEnabled,
+} from "../api";
+import type { McpClient, McpStatus, PluginInfo, Settings } from "../types";
 import { Dialog } from "./dialog";
 
 const CLIENTS: { id: McpClient; label: string }[] = [
@@ -29,6 +40,10 @@ export function SettingsDialog({
   const [mcpBusy, setMcpBusy] = useState(false);
   const [client, setClient] = useState<McpClient>("claude");
   const [copied, setCopied] = useState(false);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [pluginError, setPluginError] = useState<string | null>(null);
+  const [pluginBusy, setPluginBusy] = useState(false);
+  const [githubUrl, setGithubUrl] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +53,13 @@ export function SettingsDialog({
       })
       .catch((error) => {
         if (!cancelled) setMcpError(errorMessage(error));
+      });
+    void listPlugins()
+      .then((loaded) => {
+        if (!cancelled) setPlugins(loaded);
+      })
+      .catch((error) => {
+        if (!cancelled) setPluginError(errorMessage(error));
       });
     return () => {
       cancelled = true;
@@ -74,6 +96,35 @@ export function SettingsDialog({
     }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  async function changePlugins(action: () => Promise<PluginInfo[]>) {
+    setPluginBusy(true);
+    setPluginError(null);
+    try {
+      setPlugins(await action());
+    } catch (error) {
+      setPluginError(errorMessage(error));
+    } finally {
+      setPluginBusy(false);
+    }
+  }
+
+  async function installFolder() {
+    const picked = await open({
+      directory: true,
+      multiple: false,
+      title: "Choose plugin folder",
+    });
+    if (typeof picked === "string") {
+      await changePlugins(() => installPluginFolder(picked));
+    }
+  }
+
+  async function installGithub() {
+    const url = githubUrl.trim();
+    if (!url) return;
+    await changePlugins(() => installPluginGithub(url));
   }
 
   async function browse() {
@@ -159,6 +210,85 @@ export function SettingsDialog({
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
+      </section>
+      <section>
+        <h3>Plugins</h3>
+        <p className="muted">
+          Rust plugins with a manifest.toml. They run inside KbWrite and can read and write this vault.
+          Docs: kbwrite.ink/plugins
+        </p>
+        {plugins.length === 0 && <p className="muted">No plugins installed.</p>}
+        <ul className="plugin-list">
+          {plugins.map((plugin) => (
+            <li key={plugin.id} className="plugin-row">
+              <div className="plugin-title">
+                <strong>{plugin.name}</strong>
+                <span className="muted">{plugin.version}</span>
+              </div>
+              {plugin.description && <p>{plugin.description}</p>}
+              {plugin.authors && <p className="muted">{plugin.authors}</p>}
+              {plugin.error && <p className="plugin-error">{plugin.error}</p>}
+              <div className="plugin-actions">
+                <button
+                  type="button"
+                  disabled={pluginBusy}
+                  onClick={() => void changePlugins(() => setPluginEnabled(plugin.id, !plugin.enabled))}
+                >
+                  {plugin.enabled ? "Disable" : "Enable"}
+                </button>
+                <button
+                  type="button"
+                  disabled={pluginBusy}
+                  onClick={() => void changePlugins(() => removePlugin(plugin.id))}
+                >
+                  Remove
+                </button>
+                {plugin.commands.map((command) => (
+                  <button
+                    key={command.id}
+                    type="button"
+                    className="primary"
+                    disabled={pluginBusy || !plugin.loaded}
+                    onClick={() =>
+                      void changePlugins(async () => {
+                        await runPluginCommand(plugin.id, command.id);
+                        return listPlugins();
+                      })
+                    }
+                  >
+                    {command.name}
+                  </button>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+        {pluginError && <p className="plugin-error">{pluginError}</p>}
+        <div className="plugin-actions">
+          <button type="button" disabled={pluginBusy} onClick={() => void installFolder()}>
+            Install from folder
+          </button>
+        </div>
+        <label>
+          GitHub URL
+          <div className="field-row">
+            <input
+              className="field"
+              value={githubUrl}
+              placeholder="https://github.com/owner/repo"
+              onChange={(event) => setGithubUrl(event.target.value)}
+              aria-label="Plugin GitHub URL"
+            />
+            <button
+              type="button"
+              className="primary"
+              disabled={pluginBusy || !githubUrl.trim()}
+              onClick={() => void installGithub()}
+            >
+              Install
+            </button>
+          </div>
+        </label>
       </section>
       <div className="dialog-actions">
         <button

@@ -2,6 +2,7 @@ mod commands;
 mod graph;
 mod mcp;
 mod media;
+mod plugins;
 mod settings;
 mod vault;
 
@@ -20,6 +21,11 @@ pub fn run() {
             settings: Arc::new(Mutex::new(settings)),
             vault: Arc::new(Mutex::new(commands::VaultSlot { vault, error })),
             mcp: Mutex::new(None),
+            plugins: Mutex::new(plugins::empty_host()),
+        })
+        .setup(|app| {
+            plugins::attach(app.handle());
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_snapshot,
@@ -39,6 +45,12 @@ pub fn run() {
             commands::open_media,
             commands::graph,
             commands::open_privacy_settings,
+            plugins::list_plugins,
+            plugins::install_plugin_folder,
+            plugins::install_plugin_github,
+            plugins::set_plugin_enabled,
+            plugins::remove_plugin,
+            plugins::run_plugin_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running KbWrite");

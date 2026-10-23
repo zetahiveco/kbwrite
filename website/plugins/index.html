@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>Plugins — KbWrite</title>
+    <meta
+      name="description"
+      content="Write KbWrite plugins in Rust. Install them from a folder or a GitHub URL."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <a class="ghost github" href="https://github.com/zetahiveco/kbwrite" aria-label="GitHub">
+        <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+    </header>
+
+    <main class="docs">
+      <h1>Plugins</h1>
+      <p>
+        A KbWrite plugin is a Rust library. It loads inside the app and uses the plugin API to read
+        and write notes, and to add commands. Plugins are native code: install only the ones you trust.
+      </p>
+
+      <h2>Install</h2>
+      <p>Open Settings, then either:</p>
+      <ul>
+        <li>Choose the plugin folder. That folder must contain <code>manifest.toml</code>.</li>
+        <li>
+          Paste a GitHub URL, such as <code>https://github.com/owner/repo</code>. KbWrite downloads
+          the repository, finds <code>manifest.toml</code>, and builds the plugin with Cargo when
+          the library is not already there.
+        </li>
+      </ul>
+      <p>
+        Installed plugins live in <span class="path">~/.kbwrite/plugins</span>. Disable or remove
+        them from Settings. Commands a plugin registers show up on its row.
+      </p>
+
+      <h2>manifest.toml</h2>
+      <p>Every plugin folder needs this file.</p>
+      <pre><code>id = "hello"
+name = "Hello"
+version = "0.1.0"
+description = "Adds a command that creates a note."
+authors = ["Ada"]
+min_app_version = "0.5.0"
+entry = "hello_plugin"</code></pre>
+      <p>
+        <code>id</code> is the folder name KbWrite uses. <code>entry</code> is the library name from
+        Cargo, without <code>lib</code> or an extension. A crate named <code>hello_plugin</code>
+        produces <code>libhello_plugin.dylib</code> on macOS, <code>libhello_plugin.so</code> on
+        Linux, and <code>hello_plugin.dll</code> on Windows.
+      </p>
+
+      <h2>The API</h2>
+      <p>
+        Depend on <code>kbwrite-plugin</code> and export one type with <code>export_plugin!</code>.
+        From this repository:
+      </p>
+      <pre><code>kbwrite-plugin = { path = "../../src-tauri/plugin-api" }</code></pre>
+      <p>From a plugin of your own, point Cargo at the git package:</p>
+      <pre><code>kbwrite-plugin = { git = "https://github.com/zetahiveco/kbwrite", package = "kbwrite-plugin" }</code></pre>
+      <p><code>Api</code> can:</p>
+      <ul>
+        <li><code>vault_path</code> — absolute path of the open vault</li>
+        <li><code>notes</code> — relative paths of every markdown note</li>
+        <li><code>read_note</code> / <code>write_note</code> — read or replace a note</li>
+        <li><code>create_note</code> — add a note in the vault root</li>
+        <li><code>delete_path</code> — delete a note or folder inside the vault</li>
+        <li><code>log</code> — show a short message in KbWrite</li>
+        <li><code>register_command</code> — add a button in Settings</li>
+      </ul>
+      <p>
+        Paths may be relative (<code>Plan.md</code> or <code>Plan</code>) or absolute, and must stay
+        inside the vault.
+      </p>
+
+      <h2>Example</h2>
+      <p>
+        A working sample is in
+        <a href="https://github.com/zetahiveco/kbwrite/tree/main/plugins/example">plugins/example</a>.
+        The library looks like this:
+      </p>
+      <pre><code>use kbwrite_plugin::{export_plugin, Api, Plugin};
+
+#[derive(Default)]
+struct Hello;
+
+impl Plugin for Hello {
+    fn load(&amp;mut self, api: &amp;Api) {
+        let _ = api.register_command("hello", "Write hello note");
+    }
+
+    fn command(&amp;mut self, api: &amp;Api, id: &amp;str) {
+        if id == "hello" {
+            match api.create_note("Hello from plugin", "Written by the Hello plugin.\n") {
+                Ok(path) => api.log(&amp;format!("Created {path}")),
+                Err(error) => api.log(&amp;error),
+            }
+        }
+    }
+}
+
+export_plugin!(Hello);</code></pre>
+      <p>Build it, or let Settings build it when you install the folder:</p>
+      <pre><code>cargo build --release</code></pre>
+      <p>
+        The dynamic library exports <code>kbwrite_plugin_vtable</code>. KbWrite calls
+        <code>load</code> when the plugin is enabled, <code>command</code> when you run a command,
+        and <code>unload</code> when you disable or remove it.
+      </p>
+    </main>
+
+    <footer>
+      <a href="/">KbWrite</a>
+      <a href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+      <span>MIT</span>
+    </footer>
+  </body>
+</html>

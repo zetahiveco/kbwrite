@@ -255,6 +255,21 @@ export function App() {
   }, [reloadExternal]);
 
   useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void listen<string>("plugin-notice", (event) => {
+      if (event.payload) toast(event.payload);
+    }).then((stop) => {
+      if (cancelled) stop();
+      else unlisten = stop;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [toast]);
+
+  useEffect(() => {
     const note = snap?.notes.find((item) => item.path === currentPath);
     const title = note ? `KbWrite — ${note.title}` : "KbWrite";
     void getCurrentWindow().setTitle(title).catch(() => undefined);

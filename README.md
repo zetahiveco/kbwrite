@@ -13,6 +13,7 @@ Site: [kbwrite.ink](https://kbwrite.ink). Source, issues, and downloads: [github
 - **Wikilinks** — `/` → **Link to note**, or type `[[Note]]` yourself.
 - **Graph view** — notes are nodes, `[[links]]` and local markdown links are edges.
 - **MCP server** — start it in Settings, then connect Claude, Codex, or OpenCode so they can read and write the vault.
+- **Rust plugins** — install from a folder or a GitHub URL in Settings. Each plugin has a `manifest.toml`. [Plugin docs](https://kbwrite.ink/plugins).
 - **Light and dark mode.**
 - **Raw markdown** — switch to the source whenever you want.
 - **File tree** — create, rename, and delete notes and folders.

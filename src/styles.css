@@ -92,6 +92,11 @@ button:disabled {
   padding: 10px 10px 8px;
 }
 
+.sidebar-head {
+  position: relative;
+  z-index: 2;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -284,12 +289,15 @@ button:disabled {
   color: var(--text);
 }
 
-.toolbar-actions button[data-tooltip] {
+.toolbar-actions button[data-tooltip],
+.sidebar-actions button[data-tooltip] {
   position: relative;
 }
 
 .toolbar-actions button[data-tooltip]:hover::after,
-.toolbar-actions button[data-tooltip]:focus-visible::after {
+.toolbar-actions button[data-tooltip]:focus-visible::after,
+.sidebar-actions button[data-tooltip]:hover::after,
+.sidebar-actions button[data-tooltip]:focus-visible::after {
   content: attr(data-tooltip);
   position: absolute;
   top: calc(100% + 6px);
@@ -315,6 +323,10 @@ button:disabled {
 }
 
 .editor-frame { overflow: auto; }
+
+.editor-frame .bn-suggestion-menu-label:empty {
+  display: none;
+}
 
 .editor-pending { opacity: 0; }
 
@@ -484,6 +496,39 @@ button:disabled {
 }
 
 .mcp-copy { margin-top: 8px; }
+
+.plugin-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plugin-row {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.plugin-row p { margin: 4px 0; }
+
+.plugin-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.plugin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.plugin-error { color: var(--danger); }
 
 .dialog-head { justify-content: space-between; margin-bottom: 8px; }
 .dialog h2 { margin: 0; font-size: 16px; }

@@ -13,6 +13,7 @@ pub struct AppState {
     pub settings: Arc<Mutex<Settings>>,
     pub vault: Arc<Mutex<VaultSlot>>,
     pub mcp: Mutex<Option<crate::mcp::Running>>,
+    pub plugins: Mutex<crate::plugins::PluginHost>,
 }
 
 pub struct VaultSlot {

@@ -1,0 +1,15 @@
+[workspace]
+
+[package]
+name = "hello-plugin"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Sample KbWrite plugin. Adds a command that creates a note."
+
+[lib]
+crate-type = ["cdylib"]
+name = "hello_plugin"
+
+[dependencies]
+kbwrite-plugin = { path = "../../src-tauri/plugin-api" }

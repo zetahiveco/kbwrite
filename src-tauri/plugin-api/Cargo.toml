@@ -1,0 +1,9 @@
+[package]
+name = "kbwrite-plugin"
+version = "0.1.0"
+edition = "2021"
+description = "API for writing KbWrite plugins in Rust."
+license = "MIT"
+publish = false
+
+[dependencies]

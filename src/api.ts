@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { GraphData, McpStatus, Mutation, Settings, Snapshot } from "./types";
+import type { GraphData, McpStatus, Mutation, PluginInfo, Settings, Snapshot } from "./types";
 
 export function getSnapshot(): Promise<Snapshot> {
   return invoke("get_snapshot");
@@ -67,6 +67,30 @@ export function readMediaText(url: string): Promise<string> {
 
 export function openMedia(url: string): Promise<void> {
   return invoke("open_media", { url });
+}
+
+export function listPlugins(): Promise<PluginInfo[]> {
+  return invoke("list_plugins");
+}
+
+export function installPluginFolder(path: string): Promise<PluginInfo[]> {
+  return invoke("install_plugin_folder", { path });
+}
+
+export function installPluginGithub(url: string): Promise<PluginInfo[]> {
+  return invoke("install_plugin_github", { url });
+}
+
+export function setPluginEnabled(id: string, enabled: boolean): Promise<PluginInfo[]> {
+  return invoke("set_plugin_enabled", { id, enabled });
+}
+
+export function removePlugin(id: string): Promise<PluginInfo[]> {
+  return invoke("remove_plugin", { id });
+}
+
+export function runPluginCommand(pluginId: string, commandId: string): Promise<void> {
+  return invoke("run_plugin_command", { pluginId, commandId });
 }
 
 export function errorMessage(error: unknown): string {

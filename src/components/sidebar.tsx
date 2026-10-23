@@ -131,7 +131,8 @@ export function Sidebar({
           <button
             type="button"
             className="icon-btn"
-            title="New file (Cmd/Ctrl+N)"
+            data-tooltip="New file (Cmd/Ctrl+N)"
+            aria-label="New file"
             onClick={() => startCreate("new-file", vaultPath)}
           >
             <FilePlus size={16} />
@@ -139,7 +140,8 @@ export function Sidebar({
           <button
             type="button"
             className="icon-btn"
-            title="New folder"
+            data-tooltip="New folder"
+            aria-label="New folder"
             onClick={() => startCreate("new-folder", vaultPath)}
           >
             <FolderPlus size={16} />
@@ -147,7 +149,8 @@ export function Sidebar({
           <button
             type="button"
             className="icon-btn"
-            title="Settings (Cmd/Ctrl+,)"
+            data-tooltip="Settings (Cmd/Ctrl+,)"
+            aria-label="Settings"
             onClick={onOpenSettings}
           >
             <GearSix size={16} />

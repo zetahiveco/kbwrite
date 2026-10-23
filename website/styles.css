@@ -61,6 +61,43 @@ a { color: inherit; }
 
 .ghost:hover { border-color: var(--pink); color: var(--pink); }
 
+.github {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.github svg { display: block; }
+
+.facts a { color: var(--pink); }
+
+.docs {
+  text-align: left;
+  width: min(760px, calc(100% - 40px));
+}
+
+.docs h1 {
+  font-size: clamp(32px, 5vw, 48px);
+}
+
+.docs h2 {
+  margin: 32px 0 8px;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.docs p, .docs li {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.docs a { color: var(--pink); }
+
+.docs pre { margin: 12px 0 16px; }
+
 main {
   flex: 1;
   width: min(720px, calc(100% - 40px));
@@ -149,6 +186,9 @@ pre {
   border-radius: 12px;
   background: #000;
   border: 1px solid rgba(226, 43, 104, 0.22);
+}
+
+.cmd pre {
   white-space: pre-wrap;
   word-break: break-all;
 }

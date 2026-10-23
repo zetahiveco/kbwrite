@@ -27,6 +27,25 @@ import { csvBlock, docxBlock, pdfBlock, xlsxBlock } from "./media-blocks";
 
 const HIDDEN_SLASH = new Set(["File"]);
 
+// BlockNote keys each section label by its group name. The same name twice
+// (built-in media, then PDF/CSV/DOCX/XLSX) leaves the first labels stuck on
+// screen after the query filters them out.
+function organizeSlashItems(items: DefaultReactSuggestionItem[]) {
+  const order: string[] = [];
+  const grouped = new Map<string, DefaultReactSuggestionItem[]>();
+  for (const item of items) {
+    const group = item.group ?? "";
+    let bucket = grouped.get(group);
+    if (!bucket) {
+      bucket = [];
+      grouped.set(group, bucket);
+      order.push(group);
+    }
+    bucket.push(item);
+  }
+  return order.flatMap((group) => grouped.get(group)!);
+}
+
 const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
@@ -148,13 +167,13 @@ export function NoteEditor({
           triggerCharacter="/"
           getItems={async (query) =>
             filterSuggestionItems(
-              [
+              organizeSlashItems([
                 ...getDefaultReactSlashMenuItems(editor).filter(
                   (item) => !HIDDEN_SLASH.has(item.title),
                 ),
                 linkItem(() => setLinkOpen(true)),
                 ...documentItems(editor),
-              ],
+              ]),
               query,
             )
           }
@@ -211,7 +230,6 @@ function linkItem(onPick: () => void): DefaultReactSuggestionItem {
     title: "Link to note",
     subtext: "Insert a [[wikilink]]",
     aliases: ["link", "wiki", "note", "page", "reference"],
-    group: "KbWrite",
     icon: <LinkSimple size={18} />,
     onItemClick: onPick,
   };

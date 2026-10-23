@@ -1,0 +1,7 @@
+id = "hello"
+name = "Hello"
+version = "0.1.0"
+description = "Adds a command that creates a note in the vault."
+authors = ["KbWrite"]
+min_app_version = "0.5.0"
+entry = "hello_plugin"
