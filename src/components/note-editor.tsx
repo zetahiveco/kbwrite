@@ -1,9 +1,7 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
-  BlockNoteSchema,
   FilePanelExtension,
   FormattingToolbarExtension,
-  defaultBlockSpecs,
   insertOrUpdateBlockForSlashMenu,
   type BlockNoteEditor,
 } from "@blocknote/core";
@@ -19,11 +17,11 @@ import {
 import { FileCsv, FileDoc, FilePdf, FileXls, LinkSimple } from "@phosphor-icons/react";
 import { saveMedia } from "../api";
 import { fileToBase64, mediaKind, restoreMediaMarkdown, displayUrl } from "../media";
-import type { NoteMeta } from "../types";
+import type { NoteMeta, PluginBlock } from "../types";
 import { expandWikilinks, findNotePath } from "../wikilink";
-import { inlineContentSpecs, openWikilink, wikilinkExtension } from "../wikilink-inline";
+import { openWikilink, wikilinkExtension } from "../wikilink-inline";
+import { createEditorSchema, pluginSlashItems } from "../plugin-blocks";
 import { Dialog } from "./dialog";
-import { csvBlock, docxBlock, pdfBlock, xlsxBlock } from "./media-blocks";
 
 const HIDDEN_SLASH = new Set(["File"]);
 
@@ -46,23 +44,13 @@ function organizeSlashItems(items: DefaultReactSuggestionItem[]) {
   return order.flatMap((group) => grouped.get(group)!);
 }
 
-const schema = BlockNoteSchema.create({
-  blockSpecs: {
-    ...defaultBlockSpecs,
-    pdf: pdfBlock(),
-    csv: csvBlock(),
-    docx: docxBlock(),
-    xlsx: xlsxBlock(),
-  },
-  inlineContentSpecs,
-});
-
 export function NoteEditor({
   notePath,
   initialMarkdown,
   dark,
   fullWidth,
   notes,
+  pluginBlocks,
   onMarkdown,
   onEditor,
   onError,
@@ -73,11 +61,13 @@ export function NoteEditor({
   dark: boolean;
   fullWidth: boolean;
   notes: NoteMeta[];
+  pluginBlocks: PluginBlock[];
   onMarkdown: (markdown: string) => void;
   onEditor: (editor: BlockNoteEditor<any, any, any> | null) => void;
   onError: (message: string) => void;
   onOpen: (path: string) => void;
 }) {
+  const schema = useMemo(() => createEditorSchema(pluginBlocks), [pluginBlocks]);
   const editor = useCreateBlockNote({
     schema,
     extensions: [wikilinkExtension()],
@@ -173,6 +163,7 @@ export function NoteEditor({
                 ),
                 linkItem(() => setLinkOpen(true)),
                 ...documentItems(editor),
+                ...pluginSlashItems(editor, pluginBlocks),
               ]),
               query,
             )
@@ -185,7 +176,9 @@ export function NoteEditor({
           onClose={() => setLinkOpen(false)}
           onPick={(title) => {
             const target = title.replace(/[\[\]]/g, "");
-            editor.insertInlineContent([{ type: "wikilink", props: { target, alias: "" } }]);
+            editor.insertInlineContent([
+              { type: "wikilink", props: { target, alias: "" } },
+            ] as any);
             setLinkOpen(false);
           }}
         />

@@ -6,5 +6,7 @@ dist
 *.vault-tmp
 src-tauri/target
 src-tauri/gen
+src-tauri/updater.key
+src-tauri/updater.key.pub
 .vercel
 .env*

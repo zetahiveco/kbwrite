@@ -1,5 +1,6 @@
 //! Callbacks a loaded plugin uses to change the vault and register commands.
 
+use super::dialog::{self, BlockSpec, DialogHub};
 use crate::commands::ensure_inside;
 use crate::vault::Vault;
 use std::ffi::{CStr, CString};
@@ -14,17 +15,26 @@ pub struct Session {
     pub id: String,
     pub vault: Arc<Mutex<VaultSlot>>,
     pub app: AppHandle,
+    pub dialogs: Arc<DialogHub>,
     pub commands: Mutex<Vec<(String, String)>>,
+    pub blocks: Mutex<Vec<BlockSpec>>,
     last_error: Mutex<String>,
 }
 
 impl Session {
-    pub fn new(id: String, vault: Arc<Mutex<VaultSlot>>, app: AppHandle) -> Self {
+    pub fn new(
+        id: String,
+        vault: Arc<Mutex<VaultSlot>>,
+        app: AppHandle,
+        dialogs: Arc<DialogHub>,
+    ) -> Self {
         Self {
             id,
             vault,
             app,
+            dialogs,
             commands: Mutex::new(Vec::new()),
+            blocks: Mutex::new(Vec::new()),
             last_error: Mutex::new(String::new()),
         }
     }
@@ -251,6 +261,62 @@ pub unsafe extern "C" fn register_command(
     0
 }
 
+pub unsafe extern "C" fn open_dialog(user: *mut std::ffi::c_void, spec: *const c_char) -> *mut c_char {
+    let session = session(user);
+    let spec = match arg(spec) {
+        Ok(spec) => spec,
+        Err(error) => return session.fail(error),
+    };
+    let dialog = match dialog::parse_dialog(&spec) {
+        Ok(dialog) => dialog,
+        Err(error) => return session.fail(error),
+    };
+    let app = session.app.clone();
+    let result = session.dialogs.open(|id| {
+        let _ = app.emit(
+            "plugin-dialog",
+            serde_json::json!({
+                "id": id,
+                "title": dialog.title,
+                "message": dialog.message,
+                "fields": dialog.fields,
+                "confirm": dialog.confirm,
+                "cancel": dialog.cancel,
+            }),
+        );
+    });
+    match result {
+        Ok(body) => session.ok_string(&body),
+        Err(error) => session.fail(error),
+    }
+}
+
+pub unsafe extern "C" fn register_block(user: *mut std::ffi::c_void, spec: *const c_char) -> i32 {
+    let session = session(user);
+    let spec = match arg(spec) {
+        Ok(spec) => spec,
+        Err(error) => {
+            session.fail(error);
+            return -1;
+        }
+    };
+    let block = match dialog::parse_block(&session.id, &spec) {
+        Ok(block) => block,
+        Err(error) => {
+            session.fail(error);
+            return -1;
+        }
+    };
+    if let Ok(mut blocks) = session.blocks.lock() {
+        if let Some(existing) = blocks.iter_mut().find(|item| item.type_name == block.type_name) {
+            *existing = block;
+        } else {
+            blocks.push(block);
+        }
+    }
+    0
+}
+
 fn finish_write(session: &Session, result: Result<(), String>) -> i32 {
     match result {
         Ok(()) => {
@@ -303,5 +369,7 @@ pub fn host_fns(session: &Session) -> kbwrite_plugin::HostFns {
         delete_note,
         log,
         register_command,
+        open_dialog,
+        register_block,
     }
 }

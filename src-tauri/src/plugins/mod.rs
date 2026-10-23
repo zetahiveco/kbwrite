@@ -2,10 +2,12 @@
 //! with a `manifest.toml` and a dynamic library built against `kbwrite-plugin`.
 
 mod bridge;
+mod dialog;
 mod host;
 mod install;
 mod manifest;
 
+pub use dialog::DialogHub;
 pub use host::PluginHost;
 use tauri::{AppHandle, Manager, State};
 
@@ -81,6 +83,11 @@ pub fn run_plugin_command(
     plugins.run(&plugin_id, &command_id)
 }
 
-pub fn empty_host() -> PluginHost {
-    PluginHost::default()
+pub fn host(dialogs: std::sync::Arc<DialogHub>) -> PluginHost {
+    PluginHost::new(dialogs)
+}
+
+#[tauri::command]
+pub fn resolve_plugin_dialog(state: State<'_, AppState>, id: u64, response: String) -> Result<(), String> {
+    state.dialogs.resolve(id, response)
 }

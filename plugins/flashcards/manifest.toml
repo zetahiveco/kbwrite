@@ -1,0 +1,7 @@
+id = "flashcards"
+name = "Flashcards"
+version = "0.1.0"
+description = "Adds a flashcard block and a review dialog."
+authors = ["KbWrite"]
+min_app_version = "0.7.0"
+entry = "flashcards_plugin"

@@ -58,6 +58,36 @@ export type PluginCommand = {
   name: string;
 };
 
+export type PluginBlockProp = {
+  id: string;
+  label: string;
+  default: string;
+};
+
+export type PluginBlock = {
+  type: string;
+  title: string;
+  description: string;
+  group: string;
+  props: PluginBlockProp[];
+};
+
+export type PluginDialogField = {
+  id: string;
+  label: string;
+  kind: "text" | "password" | "checkbox";
+  value: string;
+};
+
+export type PluginDialogRequest = {
+  id: number;
+  title: string;
+  message: string;
+  confirm: string;
+  cancel: string;
+  fields: PluginDialogField[];
+};
+
 export type PluginInfo = {
   id: string;
   name: string;
@@ -68,4 +98,5 @@ export type PluginInfo = {
   loaded: boolean;
   error: string | null;
   commands: PluginCommand[];
+  blocks: PluginBlock[];
 };

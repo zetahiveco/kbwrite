@@ -1,7 +1,7 @@
 {
   "name": "kbwrite",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Local-first knowledge base. React and BlockNote in a Tauri app, with markdown notes on disk.",
   "homepage": "https://kbwrite.ink",
   "repository": {
@@ -29,6 +29,8 @@
     "@phosphor-icons/react": "^2.1.10",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

@@ -8,7 +8,7 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 /// Function pointers the app fills in before calling a plugin.
 #[repr(C)]
@@ -25,6 +25,8 @@ pub struct HostFns {
     pub delete_note: unsafe extern "C" fn(*mut c_void, *const c_char) -> i32,
     pub log: unsafe extern "C" fn(*mut c_void, *const c_char),
     pub register_command: unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char) -> i32,
+    pub open_dialog: unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char,
+    pub register_block: unsafe extern "C" fn(*mut c_void, *const c_char) -> i32,
 }
 
 /// What a plugin exports as `kbwrite_plugin_vtable`.
@@ -159,6 +161,33 @@ impl Api {
         let id = Self::pass(id)?;
         let name = Self::pass(name)?;
         let code = unsafe { (fns.register_command)(fns.user, id.as_ptr(), name.as_ptr()) };
+        if code == 0 {
+            Ok(())
+        } else {
+            Err(self.error_text())
+        }
+    }
+
+    /// Open a dialog and wait until the user confirms or cancels.
+    ///
+    /// `spec` is JSON: `title`, optional `message`, optional `fields`
+    /// (`id`, `label`, `kind` of `text` | `password` | `checkbox`, optional `value`),
+    /// and optional `confirm` / `cancel` labels.
+    /// The returned JSON is `{ "confirmed": true, "values": { "id": "..." } }`
+    /// or `{ "confirmed": false, "values": {} }`.
+    pub fn open_dialog(&self, spec: &str) -> Result<String, String> {
+        let fns = self.fns().ok_or("Plugin API is not available")?;
+        let spec = Self::pass(spec)?;
+        self.take(unsafe { (fns.open_dialog)(fns.user, spec.as_ptr()) })
+    }
+
+    /// Add a block to the slash menu. `spec` is JSON: `id`, `title`, optional
+    /// `description` and `group`, and `props` (`id`, `label`, optional `default`).
+    /// The block type in a note is `plugin_<plugin id>_<id>`.
+    pub fn register_block(&self, spec: &str) -> Result<(), String> {
+        let fns = self.fns().ok_or("Plugin API is not available")?;
+        let spec = Self::pass(spec)?;
+        let code = unsafe { (fns.register_block)(fns.user, spec.as_ptr()) };
         if code == 0 {
             Ok(())
         } else {

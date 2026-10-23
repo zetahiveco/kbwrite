@@ -93,6 +93,10 @@ export function runPluginCommand(pluginId: string, commandId: string): Promise<v
   return invoke("run_plugin_command", { pluginId, commandId });
 }
 
+export function resolvePluginDialog(id: number, response: string): Promise<void> {
+  return invoke("resolve_plugin_dialog", { id, response });
+}
+
 export function errorMessage(error: unknown): string {
   if (typeof error === "string") return error;
   if (error instanceof Error && error.message) return error.message;

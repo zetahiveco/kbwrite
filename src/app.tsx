@@ -15,6 +15,8 @@ import {
   Sun,
   Trash,
 } from "@phosphor-icons/react";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import {
   createFile,
   createFolder,
@@ -22,21 +24,25 @@ import {
   errorMessage,
   getSnapshot,
   graph,
+  listPlugins,
   openPrivacySettings,
   readNote,
   reloadVault,
   renamePath,
+  resolvePluginDialog,
   saveSettings,
   writeNote,
 } from "./api";
 import { Dialog } from "./components/dialog";
 import { GraphView } from "./components/graph-view";
 import { NoteEditor } from "./components/note-editor";
+import { PluginDialog } from "./components/plugin-dialog";
 import { SettingsDialog } from "./components/settings-dialog";
 import { Sidebar } from "./components/sidebar";
-import type { GraphData, Settings, Snapshot, ViewMode } from "./types";
+import type { GraphData, PluginBlock, PluginDialogRequest, Settings, Snapshot, ViewMode } from "./types";
 
 type Toast = { id: number; message: string };
+type UpdatePhase = "checking" | "installing" | "restart";
 type PendingDelete = { path: string; name: string; isDir: boolean };
 
 export function App() {
@@ -52,6 +58,9 @@ export function App() {
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [pluginBlocks, setPluginBlocks] = useState<PluginBlock[]>([]);
+  const [pluginDialogs, setPluginDialogs] = useState<PluginDialogRequest[]>([]);
+  const [updatePhase, setUpdatePhase] = useState<UpdatePhase | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [fullWidth, setFullWidth] = useState(readFullWidth);
 
@@ -64,6 +73,7 @@ export function App() {
   const saveQueue = useRef(Promise.resolve());
   const saveTimer = useRef<number | null>(null);
   const toastId = useRef(0);
+  const updateBusy = useRef(false);
   const actions = useRef({
     save: async () => {},
     newFile: () => {},
@@ -268,6 +278,86 @@ export function App() {
       unlisten?.();
     };
   }, [toast]);
+
+  const refreshPluginBlocks = useCallback(async () => {
+    try {
+      const plugins = await listPlugins();
+      setPluginBlocks(
+        plugins.filter((plugin) => plugin.loaded).flatMap((plugin) => plugin.blocks ?? []),
+      );
+    } catch {
+      setPluginBlocks([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshPluginBlocks();
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void listen("plugins-changed", () => {
+      void refreshPluginBlocks();
+    }).then((stop) => {
+      if (cancelled) stop();
+      else unlisten = stop;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [refreshPluginBlocks]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void listen<PluginDialogRequest>("plugin-dialog", (event) => {
+      if (!event.payload) return;
+      setPluginDialogs((current) => [...current, event.payload]);
+    }).then((stop) => {
+      if (cancelled) stop();
+      else unlisten = stop;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  const checkForUpdate = useCallback(async () => {
+    if (updateBusy.current) return;
+    updateBusy.current = true;
+    setUpdatePhase("checking");
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdatePhase(null);
+        updateBusy.current = false;
+        toast("KbWrite is up to date");
+        return;
+      }
+      setUpdatePhase("installing");
+      await update.downloadAndInstall();
+      setUpdatePhase("restart");
+    } catch (error) {
+      setUpdatePhase(null);
+      updateBusy.current = false;
+      toast(errorMessage(error));
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void listen("check-updates", () => {
+      void checkForUpdate();
+    }).then((stop) => {
+      if (cancelled) stop();
+      else unlisten = stop;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [checkForUpdate]);
 
   useEffect(() => {
     const note = snap?.notes.find((item) => item.path === currentPath);
@@ -603,12 +693,13 @@ export function App() {
 
         {currentNote && view === "editor" && (
           <NoteEditor
-            key={`${currentPath}:${editorKey}`}
+            key={`${currentPath}:${editorKey}:${pluginBlocks.map((block) => block.type).join(",")}`}
             notePath={currentPath ?? ""}
             initialMarkdown={markdown}
             dark={settings.darkMode}
             fullWidth={fullWidth}
             notes={snap.notes}
+            pluginBlocks={pluginBlocks}
             onMarkdown={markDirty}
             onEditor={onEditor}
             onError={toast}
@@ -669,12 +760,42 @@ export function App() {
           </div>
         </Dialog>
       )}
+      {pluginDialogs[0] && (
+        <PluginDialog
+          key={pluginDialogs[0].id}
+          request={pluginDialogs[0]}
+          onClose={(response) => {
+            const id = pluginDialogs[0].id;
+            setPluginDialogs((current) => current.filter((item) => item.id !== id));
+            void resolvePluginDialog(id, response).catch((error) => toast(errorMessage(error)));
+          }}
+        />
+      )}
       <div className="toasts">
         {toasts.map((item) => (
           <div key={item.id} className="toast">
             {item.message}
           </div>
         ))}
+        {updatePhase && (
+          <div className="toast update-toast" role="status">
+            {updatePhase !== "restart" && <span className="spinner" aria-hidden="true" />}
+            <span>
+              {updatePhase === "checking" && "Checking for updates"}
+              {updatePhase === "installing" && "Installing update"}
+              {updatePhase === "restart" && "Update ready"}
+            </span>
+            {updatePhase === "restart" && (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void relaunch().catch((error) => toast(errorMessage(error)))}
+              >
+                Restart
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

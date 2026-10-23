@@ -80,11 +80,56 @@ entry = "hello_plugin"</code></pre>
         <li><code>delete_path</code> — delete a note or folder inside the vault</li>
         <li><code>log</code> — show a short message in KbWrite</li>
         <li><code>register_command</code> — add a button in Settings</li>
+        <li><code>open_dialog</code> — ask the user with text, password, and checkbox fields</li>
+        <li><code>register_block</code> — add a block to the <code>/</code> menu</li>
       </ul>
+      <p>
+        That is the same shape as an Obsidian community plugin: a manifest, commands, a dialog
+        (Obsidian calls it a modal), and an editor block. KbWrite does not host a separate
+        directory. Install from the plugin folder, or paste the GitHub repository URL.
+      </p>
       <p>
         Paths may be relative (<code>Plan.md</code> or <code>Plan</code>) or absolute, and must stay
         inside the vault.
       </p>
+
+      <h2>Dialogs</h2>
+      <p>
+        <code>open_dialog</code> blocks the command until the user confirms or cancels. Call it from
+        <code>command</code>, not from <code>load</code>.
+      </p>
+      <pre><code>let answer = api.open_dialog(r#"{
+  "title": "Sync with GitHub",
+  "message": "Push this vault to a repository.",
+  "fields": [
+    {"id": "repo", "label": "Repository", "kind": "text", "value": "owner/notes"},
+    {"id": "token", "label": "Token", "kind": "password"},
+    {"id": "push", "label": "Push new notes", "kind": "checkbox", "value": "true"}
+  ],
+  "confirm": "Sync",
+  "cancel": "Cancel"
+}"#)?;</code></pre>
+      <p>
+        The result is JSON: <code>{"confirmed": true, "values": {"repo": "owner/notes"}}</code>.
+        A GitHub sync plugin can then call <code>notes</code> and <code>read_note</code> and upload
+        the files with its own HTTP client.
+      </p>
+
+      <h2>Blocks</h2>
+      <p>
+        <code>register_block</code> adds a slash-menu item. Each field is a string stored on the
+        block. The type written into the note is <code>plugin_&lt;plugin id&gt;_&lt;block id&gt;</code>.
+      </p>
+      <pre><code>api.register_block(r#"{
+  "id": "card",
+  "title": "Flashcard",
+  "description": "A card with a front and a back",
+  "group": "Flashcards",
+  "props": [
+    {"id": "front", "label": "Front"},
+    {"id": "back", "label": "Back"}
+  ]
+}"#)?;</code></pre>
 
       <h2>Example</h2>
       <p>
@@ -119,6 +164,11 @@ export_plugin!(Hello);</code></pre>
         The dynamic library exports <code>kbwrite_plugin_vtable</code>. KbWrite calls
         <code>load</code> when the plugin is enabled, <code>command</code> when you run a command,
         and <code>unload</code> when you disable or remove it.
+      </p>
+      <p>
+        <a href="https://github.com/zetahiveco/kbwrite/tree/main/plugins/flashcards">plugins/flashcards</a>
+        registers a Flashcard block and a Review command that opens a dialog. Install that folder
+        the same way.
       </p>
     </main>
 

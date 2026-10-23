@@ -1,6 +1,7 @@
 //! Load installed plugins and call into them.
 
 use super::bridge::{host_fns, Session};
+use super::dialog::{BlockSpec, DialogHub};
 use super::install::plugins_dir;
 use super::manifest::Manifest;
 use crate::commands::VaultSlot;
@@ -13,11 +14,12 @@ use std::fs;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 pub struct PluginHost {
     app: Option<AppHandle>,
     vault: Option<Arc<Mutex<VaultSlot>>>,
+    dialogs: Arc<DialogHub>,
     loaded: Vec<LoadedPlugin>,
     catalog: Vec<PluginDto>,
 }
@@ -65,6 +67,7 @@ pub struct PluginDto {
     pub loaded: bool,
     pub error: Option<String>,
     pub commands: Vec<PluginCommandDto>,
+    pub blocks: Vec<BlockSpec>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -73,18 +76,17 @@ struct PluginState {
     disabled: Vec<String>,
 }
 
-impl Default for PluginHost {
-    fn default() -> Self {
+impl PluginHost {
+    pub fn new(dialogs: Arc<DialogHub>) -> Self {
         Self {
             app: None,
             vault: None,
+            dialogs,
             loaded: Vec::new(),
             catalog: Vec::new(),
         }
     }
-}
 
-impl PluginHost {
     pub fn attach(&mut self, app: AppHandle, vault: Arc<Mutex<VaultSlot>>) {
         self.app = Some(app);
         self.vault = Some(vault);
@@ -117,15 +119,18 @@ impl PluginHost {
             };
             let enabled = !disabled.iter().any(|id| id == &manifest.id);
             if !enabled {
-                catalog.push(dto(manifest, false, false, None, Vec::new()));
+                catalog.push(dto(manifest, false, false, None, Vec::new(), Vec::new()));
                 continue;
             }
             match self.load_dir(&path, &manifest) {
-                Ok(commands) => catalog.push(dto(manifest, true, true, None, commands)),
-                Err(error) => catalog.push(dto(manifest, true, false, Some(error), Vec::new())),
+                Ok((commands, blocks)) => catalog.push(dto(manifest, true, true, None, commands, blocks)),
+                Err(error) => catalog.push(dto(manifest, true, false, Some(error), Vec::new(), Vec::new())),
             }
         }
         self.catalog = catalog;
+        if let Some(app) = &self.app {
+            let _ = app.emit("plugins-changed", ());
+        }
     }
 
     pub fn set_enabled(&mut self, id: &str, enabled: bool) -> Result<(), String> {
@@ -183,9 +188,14 @@ impl PluginHost {
         }
     }
 
-    fn load_dir(&mut self, dir: &Path, manifest: &Manifest) -> Result<Vec<PluginCommandDto>, String> {
+    fn load_dir(
+        &mut self,
+        dir: &Path,
+        manifest: &Manifest,
+    ) -> Result<(Vec<PluginCommandDto>, Vec<BlockSpec>), String> {
         let app = self.app.clone().ok_or("KbWrite is still starting")?;
         let vault = self.vault.clone().ok_or("KbWrite is still starting")?;
+        let dialogs = self.dialogs.clone();
         let library_path = super::manifest::library_path(dir, &manifest.entry);
         if !library_path.is_file() {
             return Err(format!("Missing {}", library_path.display()));
@@ -205,7 +215,7 @@ impl PluginHost {
                 vtable.abi
             ));
         }
-        let session = Box::new(Session::new(manifest.id.clone(), vault, app));
+        let session = Box::new(Session::new(manifest.id.clone(), vault, app, dialogs));
         let fns = Box::new(host_fns(&session));
         let instance = unsafe { (vtable.load)(&*fns) };
         if instance.is_null() {
@@ -224,6 +234,11 @@ impl PluginHost {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
+        let blocks = session
+            .blocks
+            .lock()
+            .map(|blocks| blocks.clone())
+            .unwrap_or_default();
         self.loaded.push(LoadedPlugin {
             id: manifest.id.clone(),
             _library: library,
@@ -232,7 +247,7 @@ impl PluginHost {
             session,
             fns,
         });
-        Ok(commands)
+        Ok((commands, blocks))
     }
 }
 
@@ -242,6 +257,7 @@ fn dto(
     loaded: bool,
     error: Option<String>,
     commands: Vec<PluginCommandDto>,
+    blocks: Vec<BlockSpec>,
 ) -> PluginDto {
     PluginDto {
         id: manifest.id,
@@ -253,6 +269,7 @@ fn dto(
         loaded,
         error,
         commands,
+        blocks,
     }
 }
 
@@ -271,6 +288,7 @@ fn broken_plugin(path: &Path, error: String) -> PluginDto {
         loaded: false,
         error: Some(error),
         commands: Vec::new(),
+        blocks: Vec::new(),
     }
 }
 

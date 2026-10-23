@@ -14,6 +14,7 @@ pub struct AppState {
     pub vault: Arc<Mutex<VaultSlot>>,
     pub mcp: Mutex<Option<crate::mcp::Running>>,
     pub plugins: Mutex<crate::plugins::PluginHost>,
+    pub dialogs: std::sync::Arc<crate::plugins::DialogHub>,
 }
 
 pub struct VaultSlot {

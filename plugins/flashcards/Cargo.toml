@@ -1,0 +1,15 @@
+[workspace]
+
+[package]
+name = "flashcards-plugin"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Sample KbWrite plugin. Adds a flashcard block and a review dialog."
+
+[lib]
+crate-type = ["cdylib"]
+name = "flashcards_plugin"
+
+[dependencies]
+kbwrite-plugin = { path = "../../src-tauri/plugin-api" }
