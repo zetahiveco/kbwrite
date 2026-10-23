@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" data-os="mac">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>KbWrite</title>
+    <meta
+      name="description"
+      content="KbWrite is a local knowledge base. Install it with one command on macOS, Linux, or Windows."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script>
+      (function () {
+        var ua = navigator.userAgent || "";
+        var platform = navigator.platform || "";
+        var os = "linux";
+        if (/Win/i.test(platform) || /Windows/i.test(ua)) os = "windows";
+        else if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) os = "mac";
+        else if (/Linux|X11|Android/i.test(platform) || /Linux|Android/i.test(ua)) os = "linux";
+        document.documentElement.dataset.os = os;
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <a class="ghost" href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+    </header>
+
+    <main>
+      <img class="mark" src="/icon.png" alt="KbWrite icon" width="96" height="96" />
+      <h1>Notes that stay on your machine.</h1>
+      <p class="lede">
+        A local knowledge base with a block editor. Every note is a markdown file in a folder you choose.
+      </p>
+
+      <section class="install" aria-labelledby="install-title">
+        <h2 id="install-title">Install</h2>
+        <div class="tabs" role="tablist" aria-label="Install command">
+          <button type="button" class="tab" role="tab" data-os="mac" id="tab-mac">macOS</button>
+          <button type="button" class="tab" role="tab" data-os="linux" id="tab-linux">Linux</button>
+          <button type="button" class="tab" role="tab" data-os="windows" id="tab-windows">Windows</button>
+        </div>
+
+        <div class="cmd" data-os="mac" role="tabpanel" aria-labelledby="tab-mac">
+          <pre><code>curl -fsSL https://kbwrite.ink/install.sh | sh</code></pre>
+          <p>Copies KbWrite into your Applications folder. Apple silicon and Intel are detected.</p>
+        </div>
+        <div class="cmd" data-os="linux" role="tabpanel" aria-labelledby="tab-linux">
+          <pre><code>curl -fsSL https://kbwrite.ink/install.sh | sh</code></pre>
+          <p>Installs the latest build to <span class="path">~/.local/bin/kbwrite</span>.</p>
+        </div>
+        <div class="cmd" data-os="windows" role="tabpanel" aria-labelledby="tab-windows">
+          <pre><code>irm https://kbwrite.ink/install.ps1 | iex</code></pre>
+          <p>Run this in PowerShell. It downloads the installer and opens it.</p>
+        </div>
+
+        <button type="button" class="copy" data-copy>Copy</button>
+      </section>
+
+      <ul class="facts">
+        <li>Markdown files on disk</li>
+        <li>Block editor, type <kbd>/</kbd></li>
+        <li>Wikilinks and a graph</li>
+      </ul>
+    </main>
+
+    <footer>
+      <a href="https://github.com/zetahiveco/kbwrite/releases">Releases</a>
+      <span>MIT</span>
+    </footer>
+
+    <script>
+      var root = document.documentElement;
+      var tabs = document.querySelectorAll(".tab");
+      var copy = document.querySelector("[data-copy]");
+
+      function select(os) {
+        root.dataset.os = os;
+        tabs.forEach(function (tab) {
+          var on = tab.dataset.os === os;
+          tab.setAttribute("aria-selected", on ? "true" : "false");
+          tab.tabIndex = on ? 0 : -1;
+        });
+      }
+
+      select(root.dataset.os || "mac");
+
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          select(tab.dataset.os);
+        });
+      });
+
+      copy.addEventListener("click", function () {
+        var code = document.querySelector('.cmd[data-os="' + root.dataset.os + '"] code');
+        var text = code ? code.textContent.trim() : "";
+        function done() {
+          copy.textContent = "Copied";
+          setTimeout(function () {
+            copy.textContent = "Copy";
+          }, 1400);
+        }
+        function fallback() {
+          var area = document.createElement("textarea");
+          area.value = text;
+          area.setAttribute("readonly", "");
+          area.style.position = "absolute";
+          area.style.left = "-9999px";
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          document.body.removeChild(area);
+          done();
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(fallback);
+        } else {
+          fallback();
+        }
+      });
+    </script>
+  </body>
+</html>

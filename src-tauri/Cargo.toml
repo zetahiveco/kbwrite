@@ -5,6 +5,7 @@ edition = "2021"
 description = "A local-first knowledge base. React and BlockNote in a Tauri shell, with markdown notes on disk."
 license = "MIT"
 repository = "https://github.com/zetahiveco/kbwrite"
+homepage = "https://kbwrite.ink"
 keywords = ["notes", "knowledge-base", "tauri", "obsidian", "editor"]
 categories = ["text-editors"]
 

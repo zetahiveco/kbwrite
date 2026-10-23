@@ -4,7 +4,7 @@ A local-first, Obsidian-style knowledge base. The interface is React, the block 
 
 Your notes are plain **markdown files** in a folder on disk (your *vault*), so they stay yours: portable, diffable, and easy to back up.
 
-Source, issues, and downloads: [github.com/zetahiveco/kbwrite](https://github.com/zetahiveco/kbwrite)
+Site: [kbwrite.ink](https://kbwrite.ink). Source, issues, and downloads: [github.com/zetahiveco/kbwrite](https://github.com/zetahiveco/kbwrite)
 
 ## Features
 
@@ -36,7 +36,7 @@ One command installs the latest release. You can also download a build from
 Apple silicon and Intel are detected. The app is copied into `/Applications`, or `~/Applications` if that folder is not writable.
 
 ```bash
-curl -fsSL https://kbwrite.vercel.app/install.sh | sh
+curl -fsSL https://kbwrite.ink/install.sh | sh
 ```
 
 ### Linux
@@ -44,7 +44,7 @@ curl -fsSL https://kbwrite.vercel.app/install.sh | sh
 Installs an AppImage to `~/.local/bin/kbwrite`. If the release only has a `.deb`, the script installs that package instead (sudo may ask for a password).
 
 ```bash
-curl -fsSL https://kbwrite.vercel.app/install.sh | sh
+curl -fsSL https://kbwrite.ink/install.sh | sh
 ```
 
 If `kbwrite` is not found, add `~/.local/bin` to your `PATH`.
@@ -54,7 +54,7 @@ If `kbwrite` is not found, add `~/.local/bin` to your `PATH`.
 In PowerShell:
 
 ```powershell
-irm https://kbwrite.vercel.app/install.ps1 | iex
+irm https://kbwrite.ink/install.ps1 | iex
 ```
 
 This downloads the latest installer and opens it. x64 and ARM64 are detected.
