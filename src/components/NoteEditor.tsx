@@ -20,6 +20,8 @@ import { FileCsv, FileDoc, FilePdf, FileXls, LinkSimple } from "@phosphor-icons/
 import { saveMedia } from "../api";
 import { fileToBase64, mediaKind, restoreMediaMarkdown, displayUrl } from "../media";
 import type { NoteMeta } from "../types";
+import { expandWikilinks, findNotePath } from "../wikilink";
+import { inlineContentSpecs, openWikilink, wikilinkExtension } from "../wikilinkInline";
 import { Dialog } from "./Dialog";
 import { csvBlock, docxBlock, pdfBlock, xlsxBlock } from "./mediaBlocks";
 
@@ -33,6 +35,7 @@ const schema = BlockNoteSchema.create({
     docx: docxBlock(),
     xlsx: xlsxBlock(),
   },
+  inlineContentSpecs,
 });
 
 export function NoteEditor({
@@ -44,6 +47,7 @@ export function NoteEditor({
   onMarkdown,
   onEditor,
   onError,
+  onOpen,
 }: {
   notePath: string;
   initialMarkdown: string;
@@ -53,9 +57,11 @@ export function NoteEditor({
   onMarkdown: (markdown: string) => void;
   onEditor: (editor: BlockNoteEditor<any, any, any> | null) => void;
   onError: (message: string) => void;
+  onOpen: (path: string) => void;
 }) {
   const editor = useCreateBlockNote({
     schema,
+    extensions: [wikilinkExtension()],
     uploadFile: async (file) => {
       if (!mediaKind(file.name)) {
         throw new Error("Use an image, PDF, CSV, DOCX, XLSX, video, or audio file.");
@@ -72,8 +78,12 @@ export function NoteEditor({
   const hydrating = useRef(true);
   const onMarkdownRef = useRef(onMarkdown);
   const onErrorRef = useRef(onError);
+  const onOpenRef = useRef(onOpen);
+  const notesRef = useRef(notes);
   onMarkdownRef.current = onMarkdown;
   onErrorRef.current = onError;
+  onOpenRef.current = onOpen;
+  notesRef.current = notes;
   const [linkOpen, setLinkOpen] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -83,6 +93,21 @@ export function NoteEditor({
   }, [editor, onEditor]);
 
   useEffect(() => {
+    openWikilink.current = (target) => {
+      const path = findNotePath(notesRef.current, target);
+      if (!path) {
+        const name = target.split("#")[0].trim() || target;
+        onErrorRef.current(`No note named “${name}”`);
+        return;
+      }
+      onOpenRef.current(path);
+    };
+    return () => {
+      openWikilink.current = () => {};
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -90,8 +115,9 @@ export function NoteEditor({
           restoreMediaMarkdown(initialRef.current || ""),
         );
         if (cancelled) return;
-        if (blocks.length > 0) {
-          editor.replaceBlocks(editor.document, blocks);
+        const linked = expandWikilinks(blocks);
+        if (linked.length > 0) {
+          editor.replaceBlocks(editor.document, linked);
         }
       } catch (error) {
         onErrorRef.current(
@@ -139,7 +165,8 @@ export function NoteEditor({
           notes={notes}
           onClose={() => setLinkOpen(false)}
           onPick={(title) => {
-            editor.insertInlineContent(`[[${title.replace(/[\[\]]/g, "")}]]`);
+            const target = title.replace(/[\[\]]/g, "");
+            editor.insertInlineContent([{ type: "wikilink", props: { target, alias: "" } }]);
             setLinkOpen(false);
           }}
         />

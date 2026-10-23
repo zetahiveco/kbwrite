@@ -284,6 +284,31 @@ button:disabled {
   color: var(--text);
 }
 
+.toolbar-actions button[data-tooltip] {
+  position: relative;
+}
+
+.toolbar-actions button[data-tooltip]:hover::after,
+.toolbar-actions button[data-tooltip]:focus-visible::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 8;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--sidebar);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+}
+
 .editor-frame, .raw-frame, .graph-frame, .graph-wrap, .empty-main, .boot {
   flex: 1;
   min-height: 0;
@@ -348,6 +373,19 @@ button:disabled {
   white-space: nowrap;
 }
 .media-table th { color: var(--muted); font-weight: 600; }
+
+.editor-frame a.wikilink {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.editor-frame a.wikilink:hover {
+  text-decoration-style: solid;
+}
 
 .editor-frame .bn-editor {
   max-width: 760px;
@@ -502,12 +540,16 @@ button.danger {
 }
 
 .context-menu button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 6px 8px;
   border-radius: 6px;
 }
+
+.context-menu button svg { flex: none; }
 
 .context-menu button:hover { background: var(--hover); }
 .danger-text { color: var(--danger); }

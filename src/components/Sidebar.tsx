@@ -11,6 +11,8 @@ import {
   Info,
   MagnifyingGlass,
   Notebook,
+  PencilSimple,
+  Trash,
   Warning,
 } from "@phosphor-icons/react";
 import { errorMessage } from "../api";
@@ -295,7 +297,8 @@ export function Sidebar({
                   startRename({ path: menu.path, name: menu.name, isDir: menu.isDir })
                 }
               >
-                Rename
+                <PencilSimple size={14} />
+                Edit
               </button>
               <button
                 type="button"
@@ -305,6 +308,7 @@ export function Sidebar({
                   setMenu(null);
                 }}
               >
+                <Trash size={14} />
                 Delete
               </button>
             </>

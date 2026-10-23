@@ -3,6 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { BlockNoteEditor } from "@blocknote/core";
 import {
+  ArrowsInLineHorizontal,
+  ArrowsOutLineHorizontal,
   Code,
   FileText,
   FloppyDisk,
@@ -505,28 +507,11 @@ export function App() {
           </div>
           <div className="toolbar-actions">
             {view === "editor" && <span className="hint">Type / for blocks</span>}
-            {(view === "editor" || view === "raw") && (
-              <div className="segmented" role="group" aria-label="Editor width">
-                <button
-                  type="button"
-                  className={fullWidth ? "" : "active"}
-                  onClick={() => chooseWidth(false)}
-                >
-                  Reduced
-                </button>
-                <button
-                  type="button"
-                  className={fullWidth ? "active" : ""}
-                  onClick={() => chooseWidth(true)}
-                >
-                  Full
-                </button>
-              </div>
-            )}
             <div className="segmented" role="tablist">
               <button
                 type="button"
                 className={view === "editor" ? "active" : ""}
+                data-tooltip="Editor"
                 onClick={() => void showView("editor")}
               >
                 <PencilSimple size={14} /> Editor
@@ -534,6 +519,7 @@ export function App() {
               <button
                 type="button"
                 className={view === "raw" ? "active" : ""}
+                data-tooltip="Raw markdown"
                 onClick={() => void showView("raw")}
               >
                 <Code size={14} /> Raw
@@ -541,15 +527,29 @@ export function App() {
               <button
                 type="button"
                 className={view === "graph" ? "active" : ""}
+                data-tooltip="Graph"
                 onClick={() => void showView("graph")}
               >
                 <Graph size={14} /> Graph
               </button>
             </div>
+            {(view === "editor" || view === "raw") && (
+              <button
+                type="button"
+                className="icon-btn"
+                data-tooltip={fullWidth ? "Reduced width" : "Full width"}
+                aria-label={fullWidth ? "Reduced width" : "Full width"}
+                aria-pressed={fullWidth}
+                onClick={() => chooseWidth(!fullWidth)}
+              >
+                {fullWidth ? <ArrowsInLineHorizontal size={16} /> : <ArrowsOutLineHorizontal size={16} />}
+              </button>
+            )}
             <button
               type="button"
               className="icon-btn"
-              title={settings.darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              data-tooltip={settings.darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={settings.darkMode ? "Switch to light mode" : "Switch to dark mode"}
               onClick={() => void toggleTheme()}
             >
               {settings.darkMode ? <Sun size={16} /> : <Moon size={16} />}
@@ -557,7 +557,8 @@ export function App() {
             <button
               type="button"
               className="icon-btn"
-              title="Delete this note"
+              data-tooltip="Delete this note"
+              aria-label="Delete this note"
               disabled={!currentNote}
               onClick={() => actions.current.deleteCurrent()}
             >
@@ -566,7 +567,8 @@ export function App() {
             <button
               type="button"
               className="icon-btn"
-              title="Save (Cmd/Ctrl+S)"
+              data-tooltip="Save (Cmd/Ctrl+S)"
+              aria-label="Save"
               onClick={() => void actions.current.save()}
             >
               <FloppyDisk size={16} />
@@ -595,6 +597,7 @@ export function App() {
             onMarkdown={markDirty}
             onEditor={onEditor}
             onError={toast}
+            onOpen={(path) => void openNote(path).catch((error) => toast(errorMessage(error)))}
           />
         )}
 

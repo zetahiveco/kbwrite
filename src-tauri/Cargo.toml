@@ -1,6 +1,6 @@
 [package]
 name = "kbwrite"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 description = "A local-first knowledge base. React and BlockNote in a Tauri shell, with markdown notes on disk."
 license = "MIT"
