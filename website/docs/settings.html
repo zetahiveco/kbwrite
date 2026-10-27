@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>Settings — KbWrite</title>
+    <meta
+      name="description"
+      content="KbWrite settings: fonts and font size, custom CSS, markdown auto-format, the vault path, plugins, and the MCP server."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <div class="bar">
+        <nav aria-label="Main">
+          <a href="/docs/" aria-current="page">Docs</a>
+          <a href="/guides/">Guides</a>
+          <a href="/plugins/">Plugins</a>
+        </nav>
+        <a class="ghost github" href="https://github.com/zetahiveco/kbwrite" aria-label="GitHub">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="page">
+      <p class="crumbs"><a href="/">KbWrite</a> / <a href="/docs/">Docs</a> / Settings</p>
+      <h1>Settings</h1>
+      <p class="lede">Open with <kbd>⌘,</kbd> / <kbd>Ctrl+,</kbd> or the gear in the sidebar header.</p>
+
+      <figure class="shot">
+        <img src="/screenshots/settings.png" alt="The Settings dialog with appearance, editing, custom CSS, vault, and MCP server sections" width="1240" height="820" />
+        <figcaption>Everything lives in one dialog, saved to <code>~/.kbwrite/settings.json</code>.</figcaption>
+      </figure>
+
+      <div class="toc">
+        <div class="toc-t">On this page</div>
+        <ul>
+          <li><a href="#appearance">Appearance</a></li>
+          <li><a href="#editing">Editing</a></li>
+          <li><a href="#custom-css">Custom CSS</a></li>
+          <li><a href="#vault">Vault</a></li>
+          <li><a href="#mcp">MCP server</a></li>
+          <li><a href="#plugins">Plugins</a></li>
+        </ul>
+      </div>
+
+      <h2 id="appearance">Appearance</h2>
+      <p>
+        Dark mode on or off, plus typography: an interface font, an editor font, and the editor font
+        size (10–40&nbsp;px). The interface font changes menus, sidebar, and dialogs; the editor font
+        applies to the note text itself. Leave a font empty to use the system default.
+      </p>
+
+      <h2 id="editing">Editing</h2>
+      <p>
+        <strong>Auto-format markdown on save</strong> runs the current note through Prettier each
+        time you save, so lists, emphasis, and spacing stay consistent even if the raw file was
+        edited elsewhere. Prefer doing it by hand? <em>Format note (Prettier)</em> is in the
+        command palette.
+      </p>
+
+      <h2 id="custom-css">Custom CSS</h2>
+      <p>
+        The Custom CSS box injects your stylesheet on top of the theme — adjust the editor width,
+        spacing, colors, anything:
+      </p>
+      <pre><code>/* your CSS */
+.editor-frame { max-width: 46em; }
+.bn-block-content { letter-spacing: 0.02em; }</code></pre>
+      <p>
+        Changes apply immediately. Use it for small tweaks or a full personal theme; combine it with
+        the font settings for a setup that feels like yours.
+      </p>
+
+      <h2 id="vault">Vault</h2>
+      <p>
+        The vault path points at the folder of markdown notes KbWrite opens at startup. Change it
+        here or click the path in the sidebar footer, then Browse. KbWrite re-reads the folder when
+        files change outside the app, so pointing it at a folder that another tool also edits is
+        safe.
+      </p>
+
+      <h2 id="mcp">MCP server</h2>
+      <p>
+        The bottom section runs a local <a href="/docs/mcp.html">MCP server</a>. Press
+        <strong>Start</strong> and copy the one-line setup command for Claude, Codex, or OpenCode.
+        The server can only see the open vault, and only while KbWrite is running.
+      </p>
+
+      <h2 id="plugins">Plugins</h2>
+      <p>
+        Install a plugin from a folder or paste a GitHub URL; installed plugins can be disabled or
+        removed from the same list. See the <a href="/plugins/">plugin docs</a> for the API and a
+        walkthrough.
+      </p>
+    </main>
+
+    <footer>
+      <a href="/docs/">Docs</a>
+      <a href="/guides/">Guides</a>
+      <a href="/plugins/">Plugins</a>
+      <a href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+      <span>MIT</span>
+    </footer>
+  </body>
+</html>

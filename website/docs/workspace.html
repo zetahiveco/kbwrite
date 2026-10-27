@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>The workspace — KbWrite</title>
+    <meta
+      name="description"
+      content="KbWrite's workspace: the sidebar, bookmarks, graph view, zen mode, the read-only view, and light and dark themes."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <div class="bar">
+        <nav aria-label="Main">
+          <a href="/docs/" aria-current="page">Docs</a>
+          <a href="/guides/">Guides</a>
+          <a href="/plugins/">Plugins</a>
+        </nav>
+        <a class="ghost github" href="https://github.com/zetahiveco/kbwrite" aria-label="GitHub">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="page">
+      <p class="crumbs"><a href="/">KbWrite</a> / <a href="/docs/">Docs</a> / The workspace</p>
+      <h1>The workspace</h1>
+      <p class="lede">The sidebar, the graph, and the view modes around the editor.</p>
+
+      <div class="toc">
+        <div class="toc-t">On this page</div>
+        <ul>
+          <li><a href="#sidebar">Sidebar</a></li>
+          <li><a href="#bookmarks">Bookmarks</a></li>
+          <li><a href="#graph">Graph view</a></li>
+          <li><a href="#zen">Zen mode</a></li>
+          <li><a href="#read-only">Read-only view</a></li>
+          <li><a href="#themes">Light and dark</a></li>
+        </ul>
+      </div>
+
+      <h2 id="sidebar">Sidebar</h2>
+      <p>
+        The sidebar lists every note and folder in the vault. Filter it with the
+        <strong>Search notes</strong> box at the top; create files and folders with the buttons in the
+        header; right-click any entry to rename, delete, or bookmark it. The vault path at the bottom
+        opens <a href="/docs/settings.html">Settings</a> when clicked.
+      </p>
+
+      <h2 id="bookmarks">Bookmarks</h2>
+      <p>
+        Right-click a note (or use <em>Bookmark this note</em> in the palette) to pin it. Bookmarked
+        notes stay in a <strong>Bookmarks</strong> section at the top of the sidebar, across vaults
+        and restarts. Use it for the notes you open every day: a daily note, a task list, an index.
+      </p>
+
+      <h2 id="graph">Graph view</h2>
+      <figure class="shot">
+        <img src="/screenshots/graph.png" alt="Graph view showing notes as connected nodes" width="1240" height="820" />
+        <figcaption>Notes are nodes; wikilinks and markdown links are edges.</figcaption>
+      </figure>
+      <p>
+        <strong>Graph</strong> in the toolbar (or the palette) draws the vault as a force graph. Drag
+        to pan, scroll to zoom, click a node to open that note. Orphan notes sit at the edge — a
+        quick way to spot writing that never got connected.
+      </p>
+
+      <h2 id="zen">Zen mode</h2>
+      <figure class="shot">
+        <img src="/screenshots/zen.png" alt="Zen mode hiding the sidebar and toolbar" width="1240" height="820" />
+        <figcaption>Zen mode: only the note, nothing else. Press Escape-friendly shortcuts or the palette to leave.</figcaption>
+      </figure>
+      <p>
+        Zen mode hides the sidebar and toolbar so only the current note fills the window. Toggle it
+        from the toolbar sun icon or the command palette; the setting is remembered. Leave zen mode
+        the same way.
+      </p>
+
+      <h2 id="read-only">Read-only view</h2>
+      <p>
+        <kbd>⌘E</kbd> / <kbd>Ctrl+E</kbd> locks the editor. Blocks render without their controls,
+        which makes the note calm to read and safe to scroll with a cat on your lap. Toggle back to
+        edit. The lock state is per session, not saved with the vault.
+      </p>
+
+      <h2 id="themes">Light and dark</h2>
+      <p>
+        KbWrite ships a dark theme and a light theme; switch from the command palette
+        (<em>Switch to light mode</em>). Fonts, font size, and custom CSS are in
+        <a href="/docs/settings.html">Settings</a>.
+      </p>
+    </main>
+
+    <footer>
+      <a href="/docs/">Docs</a>
+      <a href="/guides/">Guides</a>
+      <a href="/plugins/">Plugins</a>
+      <a href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+      <span>MIT</span>
+    </footer>
+  </body>
+</html>

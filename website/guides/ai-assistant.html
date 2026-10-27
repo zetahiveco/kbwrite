@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>Work with an AI assistant — KbWrite</title>
+    <meta
+      name="description"
+      content="Connect Claude, Codex, or OpenCode to your KbWrite vault over MCP, with prompts that actually help."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <div class="bar">
+        <nav aria-label="Main">
+          <a href="/docs/">Docs</a>
+          <a href="/guides/" aria-current="page">Guides</a>
+          <a href="/plugins/">Plugins</a>
+        </nav>
+        <a class="ghost github" href="https://github.com/zetahiveco/kbwrite" aria-label="GitHub">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="page">
+      <p class="crumbs"><a href="/">KbWrite</a> / <a href="/guides/">Guides</a> / AI assistant</p>
+      <h1>Work with an AI assistant</h1>
+      <p class="lede">
+        KbWrite's built-in MCP server hands your assistant the vault — read, search, create, and
+        edit — without any of it leaving your machine.
+      </p>
+
+      <h2>1. Start the server</h2>
+      <p>
+        Settings → <strong>MCP server</strong> → <strong>Start</strong>. It serves the open vault on
+        <code>http://127.0.0.1:47321/mcp</code> and stops when KbWrite quits. See the
+        <a href="/docs/mcp.html">MCP reference</a> for details.
+      </p>
+
+      <h2>2. Connect your assistant</h2>
+      <p>Run the matching command once:</p>
+      <pre><code>claude mcp add --transport http kbwrite http://127.0.0.1:47321/mcp   # Claude Code
+codex mcp add kbwrite --url http://127.0.0.1:47321/mcp               # Codex
+opencode mcp add kbwrite --url http://127.0.0.1:47321/mcp            # OpenCode</code></pre>
+      <p>Start a session in the assistant; the <code>kbwrite</code> tools should appear.</p>
+
+      <h2>3. Jobs it is good at</h2>
+      <table>
+        <tr><th>Ask for</th><th>Why it works</th></tr>
+        <tr><td>"Summarize everything I wrote this week"</td><td><code>list_notes</code> + <code>search_notes</code> over your daily notes.</td></tr>
+        <tr><td>"Find notes about pricing and write an overview note linking them"</td><td>Search plus <code>create_note</code> — the assistant does the reading, you get a hub note.</td></tr>
+        <tr><td>"Turn the tasks in my daily notes into one checklist"</td><td>Reads several notes, writes one tidy summary note.</td></tr>
+        <tr><td>"This PDF is attached in Meeting X — extract the action items"</td><td>Reads the note, reasons over the content, appends a section.</td></tr>
+        <tr><td>"Fix broken wikilinks to [[Projekt Alpha]]"</td><td>Search catches the typos, <code>write_note</code> repairs them — review the diff in KbWrite after.</td></tr>
+      </table>
+
+      <h2>4. Keep the loop tight</h2>
+      <p>
+        Let the assistant write to <em>new</em> notes or append clearly-marked sections, then review
+        in KbWrite. Since the vault is plain files, you can also let git (see the
+        <a href="/guides/git-sync.html">git guide</a>) record every machine-made change — revert with
+        one command if an edit misses the mark.
+      </p>
+
+      <div class="callout">
+        <strong>Privacy:</strong> the server only exposes the open vault, only on
+        <code>127.0.0.1</code>, and only while KbWrite runs. What the assistant does with note
+        contents afterward is between you and that assistant's provider.
+      </div>
+
+      <h2>Beyond the built-in tools</h2>
+      <p>
+        If the six tools are not enough, a Rust plugin can add vault-aware commands with custom
+        dialogs — a nightly summarizer, a tagger, an importer. The
+        <a href="/plugins/">plugin API</a> mirrors what the MCP server exposes and runs inside the app.
+      </p>
+    </main>
+
+    <footer>
+      <a href="/docs/">Docs</a>
+      <a href="/guides/">Guides</a>
+      <a href="/plugins/">Plugins</a>
+      <a href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+      <span>MIT</span>
+    </footer>
+  </body>
+</html>

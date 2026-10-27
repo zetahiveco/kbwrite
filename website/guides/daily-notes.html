@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>Daily notes that stick — KbWrite</title>
+    <meta
+      name="description"
+      content="A daily journaling workflow for KbWrite: dated notes, tasks, bookmarks, and a weekly review."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <div class="bar">
+        <nav aria-label="Main">
+          <a href="/docs/">Docs</a>
+          <a href="/guides/" aria-current="page">Guides</a>
+          <a href="/plugins/">Plugins</a>
+        </nav>
+        <a class="ghost github" href="https://github.com/zetahiveco/kbwrite" aria-label="GitHub">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="page">
+      <p class="crumbs"><a href="/">KbWrite</a> / <a href="/guides/">Guides</a> / Daily notes</p>
+      <h1>Daily notes that stick</h1>
+      <p class="lede">A journal you will still be writing in next month.</p>
+
+      <h2>The structure</h2>
+      <p>Keep dated notes in their own folder so they never crowd the rest of the vault:</p>
+      <pre><code>Journal/
+  2026-10-26.md
+  2026-10-27.md</code></pre>
+      <p>
+        Create today's note each morning: new folder <code>Journal</code> once, then a new
+        <code>YYYY-MM-DD.md</code> inside it. Name notes by date and <kbd>⌘O</kbd> finds any day
+        instantly — type <code>1027</code> and today's note is the top hit.
+      </p>
+
+      <h2>A template worth copying</h2>
+      <pre><code># 2026-10-27
+
+## Top of mind
+- [[Project Alpha]] beta review at 14:00
+
+## Tasks
+- [ ] Reply to Grace about the index bug
+- [ ] Draft the changelog for v0.8
+- [x] Morning pages
+
+## Notes
+- Learned that `[[wikilinks]]` feed the graph automatically —
+  see [[Graph view]].
+
+## Log
+- 09:12 standup, notes in [[2026-10-27 Standup]]</code></pre>
+      <p>
+        To-dos are first-class blocks — check them off in the editor. Anything that grows beyond a
+        bullet becomes its own note, linked from the day.
+      </p>
+
+      <h2>Pin it</h2>
+      <p>
+        Bookmark yesterday's note and today's note. Each morning: create today's, unbookmark
+        yesterday's, bookmark the new one. Two clicks, and the sidebar always opens where you are
+        working.
+      </p>
+
+      <h2>The weekly review</h2>
+      <p>Friday afternoon, ten minutes:</p>
+      <ol>
+        <li><kbd>⌘O</kbd> → open each day of the week; skim for unfinished <code>[ ]</code> items.</li>
+        <li>Move anything real onto next week's list; delete the rest without guilt.</li>
+        <li><kbd>⌘⇧F</kbd> → search the week's notes for recurring topics. If one keeps appearing, it deserves a note of its own.</li>
+        <li>Look at the <a href="/docs/workspace.html#graph">graph</a> — days that link to many notes are where the real work happened.</li>
+      </ol>
+
+      <div class="callout">
+        <strong>Habit trick:</strong> keep the journal in <a href="/docs/workspace.html#zen">zen mode</a>
+        during morning writing. No sidebar, no toolbar — the page looks like paper and the shortcut
+        out (<kbd>⌘P</kbd> → <em>Zen mode</em>) is always there.
+      </div>
+
+      <h2>When a daily note is not enough</h2>
+      <p>
+        For project work that spans weeks, keep a per-project note and link the daily entries into
+        it. The daily notes become a log; the project note stays the map. The
+        <a href="/guides/ai-assistant.html">AI assistant guide</a> shows how to have an assistant
+        summarize a week of daily notes into a project update.
+      </p>
+    </main>
+
+    <footer>
+      <a href="/docs/">Docs</a>
+      <a href="/guides/">Guides</a>
+      <a href="/plugins/">Plugins</a>
+      <a href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+      <span>MIT</span>
+    </footer>
+  </body>
+</html>

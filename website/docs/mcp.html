@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>MCP server — KbWrite</title>
+    <meta
+      name="description"
+      content="Connect Claude, Codex, or OpenCode to your KbWrite vault over the Model Context Protocol."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <div class="bar">
+        <nav aria-label="Main">
+          <a href="/docs/" aria-current="page">Docs</a>
+          <a href="/guides/">Guides</a>
+          <a href="/plugins/">Plugins</a>
+        </nav>
+        <a class="ghost github" href="https://github.com/zetahiveco/kbwrite" aria-label="GitHub">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="page">
+      <p class="crumbs"><a href="/">KbWrite</a> / <a href="/docs/">Docs</a> / MCP server</p>
+      <h1>MCP server</h1>
+      <p class="lede">
+        Let your AI assistant read and write the vault through the
+        <a href="https://modelcontextprotocol.io">Model Context Protocol</a>.
+      </p>
+
+      <div class="toc">
+        <div class="toc-t">On this page</div>
+        <ul>
+          <li><a href="#start">Start the server</a></li>
+          <li><a href="#connect">Connect an assistant</a></li>
+          <li><a href="#tools">The tools</a></li>
+          <li><a href="#safety">What it can and cannot do</a></li>
+        </ul>
+      </div>
+
+      <h2 id="start">Start the server</h2>
+      <p>
+        Open <a href="/docs/settings.html">Settings</a> and press <strong>Start</strong> under
+        <em>MCP server</em>. KbWrite listens on <code>http://127.0.0.1:47321/mcp</code> — local only,
+        and scoped to the open vault. The server stops when you press Stop or quit KbWrite.
+      </p>
+
+      <h2 id="connect">Connect an assistant</h2>
+      <p>Settings shows the exact command for each supported assistant; run it once in a terminal:</p>
+      <pre><code># Claude Code
+claude mcp add --transport http kbwrite http://127.0.0.1:47321/mcp
+
+# Codex
+codex mcp add kbwrite --url http://127.0.0.1:47321/mcp
+
+# OpenCode
+opencode mcp add kbwrite --url http://127.0.0.1:47321/mcp</code></pre>
+      <p>
+        The assistant can then use the vault as a tool: list notes, search them, and create or edit
+        markdown. Start KbWrite and the server before a session; the MCP registration itself
+        persists.
+      </p>
+
+      <h2 id="tools">The tools</h2>
+      <table>
+        <tr><th>Tool</th><th>What it does</th></tr>
+        <tr><td><code>list_notes</code></td><td>Every markdown note in the vault, by relative path.</td></tr>
+        <tr><td><code>read_note</code></td><td>Read one note's markdown.</td></tr>
+        <tr><td><code>search_notes</code></td><td>Full-text search across the vault.</td></tr>
+        <tr><td><code>create_note</code></td><td>Create a note with a title and optional content.</td></tr>
+        <tr><td><code>write_note</code></td><td>Replace a note's markdown.</td></tr>
+        <tr><td><code>delete_note</code></td><td>Delete a note.</td></tr>
+      </table>
+      <p>Paths are relative to the vault, like <code>Welcome.md</code> or <code>Meeting Notes/Standup.md</code>.</p>
+
+      <h2 id="safety">What it can and cannot do</h2>
+      <p>
+        The server only exposes the open vault, only while KbWrite is running, and only on your
+        machine. It cannot see other folders, and nothing is uploaded anywhere by KbWrite itself.
+        Whatever the assistant does with the notes it reads is governed by that assistant's own
+        privacy policy — the vault is plain text on your disk, so treat prompts accordingly.
+      </p>
+      <div class="callout">
+        <strong>Tip:</strong> good first prompts are "summarize what I wrote this week",
+        "find notes that mention X and link them to the new overview note", or
+        "turn these meeting notes into tasks".
+      </div>
+    </main>
+
+    <footer>
+      <a href="/docs/">Docs</a>
+      <a href="/guides/">Guides</a>
+      <a href="/plugins/">Plugins</a>
+      <a href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+      <span>MIT</span>
+    </footer>
+  </body>
+</html>

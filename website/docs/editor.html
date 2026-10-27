@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>The editor — KbWrite</title>
+    <meta
+      name="description"
+      content="KbWrite's block editor: slash menu, math with KaTeX, Mermaid diagrams, code highlighting, wikilinks, tables, and raw markdown."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <div class="bar">
+        <nav aria-label="Main">
+          <a href="/docs/" aria-current="page">Docs</a>
+          <a href="/guides/">Guides</a>
+          <a href="/plugins/">Plugins</a>
+        </nav>
+        <a class="ghost github" href="https://github.com/zetahiveco/kbwrite" aria-label="GitHub">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="page">
+      <p class="crumbs"><a href="/">KbWrite</a> / <a href="/docs/">Docs</a> / The editor</p>
+      <h1>The editor</h1>
+      <p class="lede">
+        A block editor over plain markdown. Everything you can type is stored as text you can read
+        in any other tool.
+      </p>
+
+      <div class="toc">
+        <div class="toc-t">On this page</div>
+        <ul>
+          <li><a href="#blocks">Blocks and the slash menu</a></li>
+          <li><a href="#math">Math</a></li>
+          <li><a href="#mermaid">Mermaid diagrams</a></li>
+          <li><a href="#code">Code blocks</a></li>
+          <li><a href="#wikilinks">Wikilinks</a></li>
+          <li><a href="#media">Images and media</a></li>
+          <li><a href="#raw">Raw markdown</a></li>
+          <li><a href="#format">Formatting with Prettier</a></li>
+        </ul>
+      </div>
+
+      <h2 id="blocks">Blocks and the slash menu</h2>
+      <p>
+        A note is a list of blocks: paragraphs, headings, lists, to-dos, quotes, tables, code fences,
+        images, video, audio, PDF, CSV, DOCX, and XLSX. Press <kbd>/</kbd> on an empty line (or at
+        the start of text) to open the block menu; type to filter it. Drag the handle at the left of
+        a block to reorder, or select several and turn them into a list, a quote, and so on.
+      </p>
+      <p>Files dropped or pasted into a note are stored inside the vault and referenced from the note.</p>
+
+      <h2 id="math">Math</h2>
+      <p>
+        Type LaTeX between dollar signs and it renders as you write, with KaTeX:
+        <code>$E = mc^2$</code> inline, or a display block from <kbd>/</kbd> → <em>Math</em>:
+      </p>
+      <pre><code>$$
+\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$</code></pre>
+      <p>
+        Inline math stays editable in place — click it to change the LaTeX. The markdown on disk
+        keeps the plain <code>$…$</code> and <code>$$…$$</code> syntax, so other tools render it too.
+      </p>
+
+      <h2 id="mermaid">Mermaid diagrams</h2>
+      <p>
+        A <code>mermaid</code> code fence becomes a live diagram. Edit it with the
+        <em>Edit source</em> button on the block:
+      </p>
+      <pre><code>```mermaid
+graph TD
+    A[Idea] --&gt; B{Worth keeping?}
+    B -- yes --&gt; C[Note]
+    B -- no --&gt; D[Trash]
+```</code></pre>
+      <p>Flowcharts, sequence diagrams, gantt charts, and the rest of the Mermaid grammar all work.</p>
+
+      <h2 id="code">Code blocks</h2>
+      <p>
+        Fenced code blocks are syntax highlighted with <a href="https://shiki.style">Shiki</a> for
+        dozens of languages. Set the language from the picker at the top of the block; the language
+        is stored in the fence, exactly as you would write it by hand:
+      </p>
+      <pre><code>```ts
+export function greet(name: string): string {
+  return `Hello, ${name}!`;
+}
+```</code></pre>
+
+      <h2 id="wikilinks">Wikilinks</h2>
+      <p>
+        Type <code>[[</code> and start writing a note name — KbWrite completes notes in the vault and
+        creates the link. Clicking a wikilink opens the note; if it does not exist yet, it is created.
+        Regular markdown links work as well, and both feed the <a href="/docs/workspace.html#graph">graph view</a>.
+      </p>
+
+      <h2 id="media">Images and media</h2>
+      <p>
+        Paste or drop an image and it is saved into the vault (referenced with a
+        <code>kbwrite-media:///</code> URL that stays valid inside the folder). Video, audio, PDF,
+        CSV, and spreadsheet files embed the same way.
+      </p>
+
+      <h2 id="raw">Raw markdown</h2>
+      <p>
+        The toolbar toggle (or <em>Raw markdown</em> in the palette) swaps the block editor for a
+        plain textarea on the same file. Edit the raw text, switch back, and the block editor picks
+        up your changes. This is also the escape hatch for anything the blocks do not cover.
+      </p>
+
+      <h2 id="format">Formatting with Prettier</h2>
+      <p>
+        <em>Format note (Prettier)</em> in the command palette tidies the markdown of the current
+        note — consistent lists, spacing, and wrapping. Turn on
+        <strong>Auto-format markdown on save</strong> in <a href="/docs/settings.html">Settings</a> to
+        do this every time you save.
+      </p>
+    </main>
+
+    <footer>
+      <a href="/docs/">Docs</a>
+      <a href="/guides/">Guides</a>
+      <a href="/plugins/">Plugins</a>
+      <a href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+      <span>MIT</span>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>Getting started — KbWrite</title>
+    <meta
+      name="description"
+      content="Install KbWrite, choose a vault folder, and write your first note."
+    />
+    <link rel="icon" href="/icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">
+        <img src="/icon.png" alt="" width="28" height="28" />
+        KbWrite
+      </a>
+      <div class="bar">
+        <nav aria-label="Main">
+          <a href="/docs/" aria-current="page">Docs</a>
+          <a href="/guides/">Guides</a>
+          <a href="/plugins/">Plugins</a>
+        </nav>
+        <a class="ghost github" href="https://github.com/zetahiveco/kbwrite" aria-label="GitHub">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="page">
+      <p class="crumbs"><a href="/">KbWrite</a> / <a href="/docs/">Docs</a> / Getting started</p>
+      <h1>Getting started</h1>
+      <p class="lede">From zero to your first note in about two minutes.</p>
+
+      <div class="toc">
+        <div class="toc-t">On this page</div>
+        <ul>
+          <li><a href="#install">Install</a></li>
+          <li><a href="#vault">Choose a vault</a></li>
+          <li><a href="#first-note">Write your first note</a></li>
+          <li><a href="#files">Where your notes live</a></li>
+          <li><a href="#updates">Updates</a></li>
+        </ul>
+      </div>
+
+      <h2 id="install">Install</h2>
+      <p>
+        macOS and Linux install with one shell command, Windows with one PowerShell command. See the
+        <a href="/#install">install box on the home page</a> — it detects your platform.
+      </p>
+      <p>
+        The installers download the latest signed release from
+        <a href="https://github.com/zetahiveco/kbwrite/releases">GitHub Releases</a>. On macOS the app
+        is copied into <code>/Applications</code>; on Linux the binary lands in
+        <code>~/.local/bin</code>; on Windows an installer opens.
+      </p>
+
+      <h2 id="vault">Choose a vault</h2>
+      <p>
+        When KbWrite first opens it creates a vault at <code>Documents/KbWriteVault</code>. A vault is
+        just a folder — the app reads every <code>.md</code> file in it, including subfolders.
+      </p>
+      <p>
+        To use an existing folder of notes (say, exported from another app), open
+        <kbd>⌘,</kbd> / <kbd>Ctrl+,</kbd> <strong>Settings</strong> and set the vault path, or click
+        the vault path in the sidebar footer. KbWrite watches the folder, so changes made outside the
+        app show up on their own.
+      </p>
+
+      <figure class="shot">
+        <img src="/screenshots/hero.png" alt="KbWrite with a Welcome note open in the editor" width="1240" height="820" />
+        <figcaption>A new vault starts with a few notes; here the Welcome note is open in the editor.</figcaption>
+      </figure>
+
+      <h2 id="first-note">Write your first note</h2>
+      <ol>
+        <li>Press <kbd>⌘N</kbd> / <kbd>Ctrl+N</kbd> (or the new-file button above the sidebar) and give the note a name.</li>
+        <li>Type. Press <kbd>Enter</kbd> for a new block, <kbd>/</kbd> for the block menu: headings, lists, to-dos, quotes, tables, code, images, and more.</li>
+        <li>Link to another note by typing <code>[[</code> and part of its name, or use <kbd>/</kbd> → <em>Link to note</em>.</li>
+        <li><kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd> saves. Auto-save also runs as you edit.</li>
+      </ol>
+      <p>
+        Notes are markdown under the hood — switch to <strong>Raw markdown</strong> from the toolbar
+        or the palette to see and edit the exact file contents.
+      </p>
+
+      <h2 id="files">Where your notes live</h2>
+      <p>
+        Every note is a single <code>.md</code> file inside the vault, named after the note. Images
+        and other attachments are stored in the vault too, so the folder is complete and portable:
+        copy it, sync it, or put it in git and nothing is left behind.
+      </p>
+
+      <h2 id="updates">Updates</h2>
+      <p>
+        KbWrite checks for updates automatically and can also check from the app menu. Updates are
+        downloaded as signed artifacts from
+        <a href="https://github.com/zetahiveco/kbwrite/releases">GitHub Releases</a>.
+      </p>
+
+      <div class="callout">
+        <strong>Next:</strong> the <a href="/docs/editor.html">editor</a> covers blocks, math, diagrams,
+        and code; <a href="/docs/shortcuts.html">shortcuts</a> lists every way to move without the mouse.
+      </div>
+    </main>
+
+    <footer>
+      <a href="/docs/">Docs</a>
+      <a href="/guides/">Guides</a>
+      <a href="/plugins/">Plugins</a>
+      <a href="https://github.com/zetahiveco/kbwrite">GitHub</a>
+      <span>MIT</span>
+    </footer>
+  </body>
+</html>
