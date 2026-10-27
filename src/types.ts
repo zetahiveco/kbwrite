@@ -1,6 +1,12 @@
 export type Settings = {
   vaultPath: string;
   darkMode: boolean;
+  uiFont: string;
+  editorFont: string;
+  fontSize: number;
+  customCss: string;
+  autoFormat: boolean;
+  bookmarks: string[];
 };
 
 export type McpClient = "claude" | "codex" | "opencode";
@@ -49,6 +55,14 @@ export type GraphNode = {
 export type GraphData = {
   nodes: GraphNode[];
   edges: [number, number][];
+};
+
+export type SearchHit = {
+  path: string;
+  rel: string;
+  title: string;
+  line: number;
+  snippet: string;
 };
 
 export type ViewMode = "editor" | "raw" | "graph";

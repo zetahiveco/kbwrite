@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { GraphData, McpStatus, Mutation, PluginInfo, Settings, Snapshot } from "./types";
+import type { GraphData, McpStatus, Mutation, PluginInfo, SearchHit, Settings, Snapshot } from "./types";
 
 export function getSnapshot(): Promise<Snapshot> {
   return invoke("get_snapshot");
@@ -11,6 +11,10 @@ export function reloadVault(path: string): Promise<Snapshot> {
 
 export function readNote(path: string): Promise<string> {
   return invoke("read_note", { path });
+}
+
+export function searchVault(query: string): Promise<SearchHit[]> {
+  return invoke("search_vault", { query });
 }
 
 export function writeNote(path: string, content: string): Promise<void> {

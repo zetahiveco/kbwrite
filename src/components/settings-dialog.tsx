@@ -22,6 +22,23 @@ const CLIENTS: { id: McpClient; label: string }[] = [
   { id: "opencode", label: "OpenCode" },
 ];
 
+const UI_FONTS = [
+  { value: "", label: "System default" },
+  { value: "'SF Pro Text', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", label: "Sans — system" },
+  { value: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif", label: "Serif" },
+  { value: "'Avenir Next', 'Helvetica Neue', Arial, sans-serif", label: "Avenir" },
+  { value: "'SF Mono', ui-monospace, Menlo, Consolas, monospace", label: "Monospace" },
+];
+
+const EDITOR_FONTS = [
+  { value: "", label: "Same as interface" },
+  { value: "'SF Mono', ui-monospace, Menlo, Consolas, 'Courier New', monospace", label: "Monospace" },
+  { value: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif", label: "Serif" },
+  { value: "'SF Pro Text', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", label: "Sans — system" },
+];
+
+const FONT_SIZES = [13, 14, 15, 16, 18, 20, 24];
+
 export function SettingsDialog({
   settings,
   onClose,
@@ -146,6 +163,89 @@ export function SettingsDialog({
           {settings.darkMode ? <Moon size={15} /> : <Sun size={15} />}
           {settings.darkMode ? "Dark mode" : "Light mode"}
         </button>
+        <div className="field-grid">
+          <label>
+            Interface font
+            <select
+              value={UI_FONTS.some((font) => font.value === draft.uiFont) ? draft.uiFont : "custom"}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, uiFont: event.target.value === "custom" ? current.uiFont : event.target.value }))
+              }
+            >
+              {UI_FONTS.map((font) => (
+                <option key={font.label} value={font.value}>
+                  {font.label}
+                </option>
+              ))}
+              {draft.uiFont && !UI_FONTS.some((font) => font.value === draft.uiFont) && (
+                <option value="custom">Custom</option>
+              )}
+            </select>
+          </label>
+          <label>
+            Editor font
+            <select
+              value={EDITOR_FONTS.some((font) => font.value === draft.editorFont) ? draft.editorFont : "custom"}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, editorFont: event.target.value === "custom" ? current.editorFont : event.target.value }))
+              }
+            >
+              {EDITOR_FONTS.map((font) => (
+                <option key={font.label} value={font.value}>
+                  {font.label}
+                </option>
+              ))}
+              {draft.editorFont && !EDITOR_FONTS.some((font) => font.value === draft.editorFont) && (
+                <option value="custom">Custom</option>
+              )}
+            </select>
+          </label>
+          <label>
+            Editor font size
+            <select
+              value={String(draft.fontSize)}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, fontSize: Number(event.target.value) }))
+              }
+            >
+              {FONT_SIZES.map((size) => (
+                <option key={size} value={String(size)}>
+                  {size}px
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
+      <section>
+        <h3>Editing</h3>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={draft.autoFormat}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, autoFormat: event.target.checked }))
+            }
+          />
+          Auto-format markdown on save (Prettier)
+        </label>
+      </section>
+      <section>
+        <h3>Custom CSS</h3>
+        <p className="muted">
+          Applied on top of the built-in theme. Example: <code>.bn-block-content {"{"} letter-spacing: 0.02em; {"}"}</code>
+        </p>
+        <textarea
+          className="css-input"
+          rows={5}
+          value={draft.customCss}
+          spellCheck={false}
+          placeholder={"/* your CSS */\n.editor-frame { max-width: 46em; }"}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, customCss: event.target.value }))
+          }
+          aria-label="Custom CSS"
+        />
       </section>
       <section>
         <h3>Vault</h3>

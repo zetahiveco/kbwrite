@@ -27,6 +27,22 @@ pub struct VaultSlot {
 pub struct SettingsDto {
     pub vault_path: String,
     pub dark_mode: bool,
+    pub ui_font: String,
+    pub editor_font: String,
+    pub font_size: u32,
+    pub custom_css: String,
+    pub auto_format: bool,
+    pub bookmarks: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHitDto {
+    pub path: String,
+    pub rel: String,
+    pub title: String,
+    pub line: u32,
+    pub snippet: String,
 }
 
 #[derive(Serialize)]
@@ -100,6 +116,12 @@ fn settings_dto(settings: &Settings) -> SettingsDto {
     SettingsDto {
         vault_path: settings.vault_path.to_string_lossy().to_string(),
         dark_mode: settings.dark_mode,
+        ui_font: settings.ui_font.clone(),
+        editor_font: settings.editor_font.clone(),
+        font_size: settings.font_size,
+        custom_css: settings.custom_css.clone(),
+        auto_format: settings.auto_format,
+        bookmarks: settings.bookmarks.clone(),
     }
 }
 
@@ -244,6 +266,66 @@ pub fn read_note(state: State<'_, AppState>, path: String) -> Result<String, Str
     vault.read_note(&path).map_err(|e| format!("{e:#}"))
 }
 
+/// Case-insensitive full-text search across every note in the vault. Hits are
+/// capped so huge vaults stay responsive.
+#[tauri::command]
+pub fn search_vault(state: State<'_, AppState>, query: String) -> Result<Vec<SearchHitDto>, String> {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return Ok(Vec::new());
+    }
+    let _settings = lock_settings(&state)?;
+    let mut slot = lock_vault(&state)?;
+    let vault = vault_mut(&mut slot)?;
+    let (notes, _) = vault.load();
+    let mut hits: Vec<SearchHitDto> = Vec::new();
+    'notes: for note in &notes {
+        let content = match vault.read_note(&note.path) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+        for (index, line) in content.lines().enumerate() {
+            if hits.len() >= 200 {
+                break 'notes;
+            }
+            let lower = line.to_lowercase();
+            let Some(at) = lower.find(&needle) else {
+                continue;
+            };
+            hits.push(SearchHitDto {
+                path: note.path.to_string_lossy().to_string(),
+                rel: note.rel.clone(),
+                title: note.title.clone(),
+                line: (index + 1) as u32,
+                snippet: snippet_of(line, at, needle.chars().count()),
+            });
+        }
+    }
+    Ok(hits)
+}
+
+fn snippet_of(line: &str, at: usize, needle_len: usize) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    // Convert byte offsets from `find` to char boundaries.
+    let mut byte_to_char = Vec::with_capacity(line.len() + 1);
+    for (i, _) in line.char_indices() {
+        byte_to_char.push(i);
+    }
+    byte_to_char.push(line.len());
+    let char_at = byte_to_char.iter().position(|&b| b == at).unwrap_or(0);
+    let char_end = char_at + needle_len;
+    let start = char_at.saturating_sub(30);
+    let end = (char_end + 50).min(chars.len());
+    let mut snippet: String = chars[start..end].iter().collect();
+    if start > 0 {
+        snippet = format!("…{snippet}");
+    }
+    if end < chars.len() {
+        snippet.push('…');
+    }
+    snippet.trim().to_string()
+}
+
 #[tauri::command]
 pub fn write_note(state: State<'_, AppState>, path: String, content: String) -> Result<(), String> {
     let settings = lock_settings(&state)?;
@@ -353,6 +435,16 @@ pub fn save_settings(state: State<'_, AppState>, settings: SettingsDto) -> Resul
     let path_changed = next_path != current.vault_path;
     current.vault_path = next_path;
     current.dark_mode = settings.dark_mode;
+    current.ui_font = settings.ui_font.trim().to_string();
+    current.editor_font = settings.editor_font.trim().to_string();
+    current.font_size = settings.font_size.clamp(10, 40);
+    current.custom_css = settings.custom_css;
+    current.auto_format = settings.auto_format;
+    current.bookmarks = settings
+        .bookmarks
+        .into_iter()
+        .filter(|bookmark| !bookmark.trim().is_empty())
+        .collect();
     current.save().map_err(|e| format!("{e:#}"))?;
 
     let mut slot = lock_vault(&state)?;

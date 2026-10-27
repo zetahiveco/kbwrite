@@ -685,6 +685,7 @@ mod tests {
             settings: Arc::new(Mutex::new(Settings {
                 vault_path: dir.clone(),
                 dark_mode: true,
+                ..Settings::default()
             })),
             vault: Arc::new(Mutex::new(VaultSlot {
                 vault: Some(vault),

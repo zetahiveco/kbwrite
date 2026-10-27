@@ -9,11 +9,17 @@ import { createReactBlockSpec, type DefaultReactSuggestionItem } from "@blocknot
 import { Cards } from "@phosphor-icons/react";
 import type { PluginBlock } from "./types";
 import { csvBlock, docxBlock, pdfBlock, xlsxBlock } from "./components/media-blocks";
-import { inlineContentSpecs } from "./wikilink-inline";
+import { inlineContentSpecs as wikilinkInlineContentSpecs } from "./wikilink-inline";
+import { codeBlockSpec } from "./code-block";
+import { mathBlockSpec, mathSpec } from "./math";
+import { mermaidBlockSpec } from "./mermaid";
 
 export function createEditorSchema(blocks: PluginBlock[]): any {
   const blockSpecs: Record<string, any> = {
     ...defaultBlockSpecs,
+    codeBlock: codeBlockSpec(),
+    mathBlock: mathBlockSpec(),
+    mermaid: mermaidBlockSpec(),
     pdf: pdfBlock(),
     csv: csvBlock(),
     docx: docxBlock(),
@@ -24,7 +30,10 @@ export function createEditorSchema(blocks: PluginBlock[]): any {
   }
   return BlockNoteSchema.create({
     blockSpecs,
-    inlineContentSpecs,
+    inlineContentSpecs: {
+      ...wikilinkInlineContentSpecs,
+      math: mathSpec,
+    },
   });
 }
 

@@ -1,19 +1,25 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { BlockNoteEditor } from "@blocknote/core";
 import {
   ArrowsInLineHorizontal,
   ArrowsOutLineHorizontal,
+  BookmarkSimple,
   Code,
   FileText,
   FloppyDisk,
   Graph,
+  ListBullets,
+  ArrowsIn,
+  LockSimple,
+  LockSimpleOpen,
   Moon,
   NoteBlank,
   PencilSimple,
   Sun,
   Trash,
+  X,
 } from "@phosphor-icons/react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -33,6 +39,8 @@ import {
   saveSettings,
   writeNote,
 } from "./api";
+import { formatMarkdown } from "./format-markdown";
+import { CommandPalette, type PaletteCommand, type PaletteMode } from "./components/command-palette";
 import { Dialog } from "./components/dialog";
 import { GraphView } from "./components/graph-view";
 import { NoteEditor } from "./components/note-editor";
@@ -63,6 +71,9 @@ export function App() {
   const [updatePhase, setUpdatePhase] = useState<UpdatePhase | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [fullWidth, setFullWidth] = useState(readFullWidth);
+  const [zen, setZen] = useState(() => localStorage.getItem("kbwrite.zen") === "on");
+  const [readOnly, setReadOnly] = useState(false);
+  const [palette, setPalette] = useState<PaletteMode | null>(null);
 
   const markdownRef = useRef("");
   const dirtyRef = useRef(false);
@@ -74,11 +85,16 @@ export function App() {
   const saveTimer = useRef<number | null>(null);
   const toastId = useRef(0);
   const updateBusy = useRef(false);
+  const autoFormatRef = useRef(false);
   const actions = useRef({
     save: async () => {},
     newFile: () => {},
     toggleSettings: () => {},
     deleteCurrent: () => {},
+    toggleReadOnly: () => {},
+    toggleZen: () => {},
+    openPalette: (_mode: PaletteMode) => {},
+    formatNote: async () => {},
   });
 
   const toast = useCallback((message: string) => {
@@ -104,9 +120,12 @@ export function App() {
       let content = markdownRef.current;
       if (viewRef.current === "editor" && editorRef.current) {
         content = await editorRef.current.blocksToMarkdownLossy(editorRef.current.document);
-        markdownRef.current = content;
-        setMarkdown(content);
       }
+      if (autoFormatRef.current) {
+        content = await formatMarkdown(content);
+      }
+      markdownRef.current = content;
+      setMarkdown(content);
       await writeNote(path, content);
       dirtyRef.current = false;
       setDirty(false);
@@ -207,6 +226,30 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = settings?.darkMode === false ? "light" : "dark";
   }, [settings?.darkMode]);
+
+  // Push appearance settings into CSS custom properties and inject custom CSS.
+  useEffect(() => {
+    const root = document.documentElement;
+    const systemUi = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const uiStack = settings?.uiFont ? `${settings.uiFont}, ${systemUi}` : systemUi;
+    root.style.setProperty("--kb-ui-font-stack", uiStack);
+    root.style.setProperty(
+      "--kb-editor-font-stack",
+      settings?.editorFont ? `${settings.editorFont}, ${systemUi}` : uiStack,
+    );
+    root.style.setProperty("--kb-editor-font-size", `${settings?.fontSize || 16}px`);
+    let style = document.getElementById("kbwrite-custom-css") as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "kbwrite-custom-css";
+      document.head.appendChild(style);
+    }
+    style.textContent = settings?.customCss || "";
+  }, [settings?.uiFont, settings?.editorFont, settings?.fontSize, settings?.customCss]);
+
+  useEffect(() => {
+    autoFormatRef.current = settings?.autoFormat ?? false;
+  }, [settings?.autoFormat]);
 
   const reloadExternal = useCallback(async () => {
     try {
@@ -415,6 +458,18 @@ export function App() {
       } else if (key === ",") {
         event.preventDefault();
         actions.current.toggleSettings();
+      } else if (key === "p") {
+        event.preventDefault();
+        actions.current.openPalette("commands");
+      } else if (key === "o") {
+        event.preventDefault();
+        actions.current.openPalette("files");
+      } else if (key === "f" && event.shiftKey) {
+        event.preventDefault();
+        actions.current.openPalette("search");
+      } else if (key === "e") {
+        event.preventDefault();
+        actions.current.toggleReadOnly();
       } else if (key === "backspace") {
         const target = event.target as HTMLElement | null;
         if (target?.closest("input, textarea, [contenteditable='true']")) return;
@@ -427,6 +482,54 @@ export function App() {
   }, []);
 
   const currentNote = snap?.notes.find((note) => note.path === currentPath) ?? null;
+
+  const isMac = navigator.userAgent.includes("Mac");
+  const mod = isMac ? "⌘" : "Ctrl+";
+  const paletteCommands = useMemo<PaletteCommand[]>(() => {
+    const bookmarked = currentNote ? settings?.bookmarks.includes(currentNote.path) : false;
+    return [
+      { id: "new-note", label: "New note", shortcut: `${mod}N`, run: () => actions.current.newFile() },
+      { id: "save", label: "Save note", shortcut: `${mod}S`, run: () => void actions.current.save() },
+      { id: "format", label: "Format note (Prettier)", run: () => void actions.current.formatNote() },
+      {
+        id: "read-only",
+        label: readOnly ? "Turn off read-only view" : "Turn on read-only view",
+        shortcut: `${mod}E`,
+        run: () => actions.current.toggleReadOnly(),
+      },
+      { id: "zen", label: zen ? "Exit zen mode" : "Zen mode", run: () => actions.current.toggleZen() },
+      {
+        id: "theme",
+        label: settings?.darkMode ? "Switch to light mode" : "Switch to dark mode",
+        run: () => void toggleTheme(),
+      },
+      { id: "view-editor", label: "Show editor", run: () => void showView("editor") },
+      { id: "view-raw", label: "Raw markdown", run: () => void showView("raw") },
+      { id: "view-graph", label: "Graph view", run: () => void showView("graph") },
+      {
+        id: "bookmark",
+        label: currentNote
+          ? bookmarked
+            ? "Remove bookmark"
+            : "Bookmark this note"
+          : "Bookmark this note",
+        disabled: !currentNote,
+        hint: currentNote ? currentNote.title : undefined,
+        run: () => {
+          if (currentNote) void toggleBookmark(currentNote.path);
+        },
+      },
+      { id: "search", label: "Global search", shortcut: isMac ? "⇧⌘F" : "Ctrl+Shift+F", run: () => setPalette("search") },
+      { id: "files", label: "Go to file", shortcut: `${mod}O`, run: () => setPalette("files") },
+      {
+        id: "settings",
+        label: "Settings",
+        shortcut: `${mod},`,
+        run: () => actions.current.toggleSettings(),
+      },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentNote, settings, readOnly, zen, mod, isMac]);
 
   async function toggleTheme() {
     if (!settings) return;
@@ -455,6 +558,32 @@ export function App() {
       setCurrentPath(null);
       setMarkdown("");
     }
+  }
+
+  // Persists a partial settings change (bookmarks, theme) without opening the
+  // settings dialog.
+  async function updateSettings(patch: Partial<Settings>) {
+    if (!settings) return;
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    try {
+      const updated = await saveSettings(next);
+      setSnap(updated);
+      setSettings(updated.settings);
+    } catch (error) {
+      toast(errorMessage(error));
+    }
+  }
+
+  async function toggleBookmark(path: string) {
+    if (!settings) return;
+    const has = settings.bookmarks.includes(path);
+    await updateSettings({
+      bookmarks: has
+        ? settings.bookmarks.filter((bookmark) => bookmark !== path)
+        : [...settings.bookmarks, path],
+    });
+    toast(has ? "Bookmark removed" : "Bookmarked");
   }
 
   async function retryVault() {
@@ -522,6 +651,30 @@ export function App() {
       if (!currentNote) return;
       setPendingDelete({ path: currentNote.path, name: currentNote.title, isDir: false });
     },
+    toggleReadOnly: () => setReadOnly((current) => !current),
+    toggleZen: () =>
+      setZen((current) => {
+        localStorage.setItem("kbwrite.zen", current ? "off" : "on");
+        return !current;
+      }),
+    openPalette: (mode: PaletteMode) => setPalette(mode),
+    formatNote: async () => {
+      try {
+        await saveCurrent();
+        const formatted = await formatMarkdown(markdownRef.current);
+        if (formatted === markdownRef.current) {
+          toast("Note is already formatted");
+          return;
+        }
+        markdownRef.current = formatted;
+        setMarkdown(formatted);
+        setDirty(true);
+        if (viewRef.current === "editor") setEditorKey((key) => key + 1);
+        toast("Note formatted");
+      } catch {
+        /* toasted in saveCurrent */
+      }
+    },
   };
 
   function chooseWidth(full: boolean) {
@@ -564,13 +717,14 @@ export function App() {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell${zen ? " zen" : ""}${readOnly ? " read-only" : ""}`}>
       <div className="sidebar-slot" style={{ width: sidebarWidth }}>
         <Sidebar
           key={settings.vaultPath}
           vaultPath={settings.vaultPath}
           tree={snap.tree}
           currentPath={currentPath}
+          bookmarks={settings.bookmarks}
           vaultError={snap.vaultError}
           walkErrors={snap.walkErrors}
           permissionDenied={snap.permissionDenied}
@@ -598,6 +752,7 @@ export function App() {
           }}
           onDelete={setPendingDelete}
           onOpenSettings={() => setShowSettings(true)}
+          onToggleBookmark={(path) => void toggleBookmark(path)}
           onRetry={() => void retryVault()}
           onPrivacy={() => void openPrivacySettings().catch((error) => toast(errorMessage(error)))}
         />
@@ -653,11 +808,54 @@ export function App() {
             <button
               type="button"
               className="icon-btn"
+              data-tooltip={readOnly ? "Read-only on (Cmd/Ctrl+E)" : "Make editable (Cmd/Ctrl+E)"}
+              aria-label={readOnly ? "Read-only on" : "Make editable"}
+              aria-pressed={readOnly}
+              onClick={() => actions.current.toggleReadOnly()}
+            >
+              {readOnly ? <LockSimple size={16} /> : <LockSimpleOpen size={16} />}
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              data-tooltip="Command palette (Cmd/Ctrl+P)"
+              aria-label="Command palette"
+              onClick={() => setPalette("commands")}
+            >
+              <ListBullets size={16} />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
               data-tooltip={settings.darkMode ? "Switch to light mode" : "Switch to dark mode"}
               aria-label={settings.darkMode ? "Switch to light mode" : "Switch to dark mode"}
               onClick={() => void toggleTheme()}
             >
               {settings.darkMode ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              data-tooltip={currentNote && settings.bookmarks.includes(currentNote.path) ? "Remove bookmark" : "Bookmark this note"}
+              aria-label="Toggle bookmark"
+              disabled={!currentNote}
+              onClick={() => currentNote && void toggleBookmark(currentNote.path)}
+            >
+              {currentNote && settings.bookmarks.includes(currentNote.path) ? (
+                <BookmarkSimple size={16} weight="fill" />
+              ) : (
+                <BookmarkSimple size={16} />
+              )}
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              data-tooltip="Zen mode"
+              aria-label="Zen mode"
+              aria-pressed={zen}
+              onClick={() => actions.current.toggleZen()}
+            >
+              <ArrowsIn size={16} />
             </button>
             <button
               type="button"
@@ -698,6 +896,7 @@ export function App() {
             initialMarkdown={markdown}
             dark={settings.darkMode}
             fullWidth={fullWidth}
+            editable={!readOnly}
             notes={snap.notes}
             pluginBlocks={pluginBlocks}
             onMarkdown={markDirty}
@@ -734,6 +933,31 @@ export function App() {
         )}
         {currentNote && view === "graph" && !graphData && <div className="boot">Building graph…</div>}
       </main>
+
+      {zen && (
+        <button
+          type="button"
+          className="zen-exit"
+          data-tooltip="Exit zen mode"
+          aria-label="Exit zen mode"
+          onClick={() => actions.current.toggleZen()}
+        >
+          <X size={14} />
+        </button>
+      )}
+
+      {palette && (
+        <CommandPalette
+          mode={palette}
+          commands={paletteCommands}
+          notes={snap.notes}
+          bookmarks={settings.bookmarks}
+          currentPath={currentPath}
+          onClose={() => setPalette(null)}
+          onOpenNote={(path) => void openNote(path).catch((error) => toast(errorMessage(error)))}
+          onModeChange={setPalette}
+        />
+      )}
 
       {showSettings && (
         <SettingsDialog

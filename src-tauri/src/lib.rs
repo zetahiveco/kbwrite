@@ -37,6 +37,7 @@ pub fn run() {
             commands::get_snapshot,
             commands::reload_vault,
             commands::read_note,
+            commands::search_vault,
             commands::write_note,
             commands::create_file,
             commands::create_folder,

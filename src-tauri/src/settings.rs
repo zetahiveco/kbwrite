@@ -12,10 +12,26 @@ pub struct Settings {
     pub vault_path: PathBuf,
     #[serde(default = "default_true")]
     pub dark_mode: bool,
+    #[serde(default)]
+    pub ui_font: String,
+    #[serde(default)]
+    pub editor_font: String,
+    #[serde(default = "default_font_size")]
+    pub font_size: u32,
+    #[serde(default)]
+    pub custom_css: String,
+    #[serde(default)]
+    pub auto_format: bool,
+    #[serde(default)]
+    pub bookmarks: Vec<String>,
 }
 
 fn default_true() -> bool {
     true
+}
+
+fn default_font_size() -> u32 {
+    16
 }
 
 impl Default for Settings {
@@ -23,6 +39,12 @@ impl Default for Settings {
         Self {
             vault_path: default_vault_path(),
             dark_mode: true,
+            ui_font: String::new(),
+            editor_font: String::new(),
+            font_size: default_font_size(),
+            custom_css: String::new(),
+            auto_format: false,
+            bookmarks: Vec::new(),
         }
     }
 }

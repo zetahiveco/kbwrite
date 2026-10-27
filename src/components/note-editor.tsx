@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   FilePanelExtension,
   FormattingToolbarExtension,
+  SyntaxHighlightingExtension,
   insertOrUpdateBlockForSlashMenu,
   type BlockNoteEditor,
 } from "@blocknote/core";
@@ -21,6 +22,10 @@ import type { NoteMeta, PluginBlock } from "../types";
 import { expandWikilinks, findNotePath } from "../wikilink";
 import { openWikilink, wikilinkExtension } from "../wikilink-inline";
 import { createEditorSchema, pluginSlashItems } from "../plugin-blocks";
+import { shikiHighlighter } from "../code-block";
+import { mathExtension, mathSlashItems } from "../math";
+import { mermaidSlashItems } from "../mermaid";
+import { markdownToEditorMarkdown } from "../markdown-pipes";
 import { Dialog } from "./dialog";
 
 const HIDDEN_SLASH = new Set(["File"]);
@@ -49,6 +54,7 @@ export function NoteEditor({
   initialMarkdown,
   dark,
   fullWidth,
+  editable,
   notes,
   pluginBlocks,
   onMarkdown,
@@ -60,6 +66,7 @@ export function NoteEditor({
   initialMarkdown: string;
   dark: boolean;
   fullWidth: boolean;
+  editable: boolean;
   notes: NoteMeta[];
   pluginBlocks: PluginBlock[];
   onMarkdown: (markdown: string) => void;
@@ -70,7 +77,11 @@ export function NoteEditor({
   const schema = useMemo(() => createEditorSchema(pluginBlocks), [pluginBlocks]);
   const editor = useCreateBlockNote({
     schema,
-    extensions: [wikilinkExtension()],
+    extensions: [
+      wikilinkExtension(),
+      mathExtension(),
+      SyntaxHighlightingExtension({ createHighlighter: () => shikiHighlighter }),
+    ],
     uploadFile: async (file) => {
       if (!mediaKind(file.name)) {
         throw new Error("Use an image, PDF, CSV, DOCX, XLSX, video, or audio file.");
@@ -121,7 +132,7 @@ export function NoteEditor({
     (async () => {
       try {
         const blocks = await editor.tryParseMarkdownToBlocks(
-          restoreMediaMarkdown(initialRef.current || ""),
+          restoreMediaMarkdown(markdownToEditorMarkdown(initialRef.current || "")),
         );
         if (cancelled) return;
         const linked = expandWikilinks(blocks);
@@ -152,7 +163,12 @@ export function NoteEditor({
 
   return (
     <div className={`editor-frame${fullWidth ? " full-width" : ""}${ready ? "" : " editor-pending"}`}>
-      <BlockNoteView editor={editor} theme={dark ? "dark" : "light"} slashMenu={false}>
+      <BlockNoteView
+        editor={editor}
+        theme={dark ? "dark" : "light"}
+        editable={editable}
+        slashMenu={false}
+      >
         <SuggestionMenuController
           triggerCharacter="/"
           getItems={async (query) =>
@@ -163,6 +179,8 @@ export function NoteEditor({
                 ),
                 linkItem(() => setLinkOpen(true)),
                 ...documentItems(editor),
+                ...mathSlashItems(editor),
+                ...mermaidSlashItems(editor),
                 ...pluginSlashItems(editor, pluginBlocks),
               ]),
               query,

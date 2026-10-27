@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
+  BookmarkSimple,
   CaretDown,
   CaretRight,
   FilePlus,
@@ -38,6 +39,7 @@ export function Sidebar({
   vaultPath,
   tree,
   currentPath,
+  bookmarks,
   vaultError,
   walkErrors,
   permissionDenied,
@@ -47,12 +49,14 @@ export function Sidebar({
   onRename,
   onDelete,
   onOpenSettings,
+  onToggleBookmark,
   onRetry,
   onPrivacy,
 }: {
   vaultPath: string;
   tree: TreeNode[];
   currentPath: string | null;
+  bookmarks: string[];
   vaultError: string | null;
   walkErrors: string[];
   permissionDenied: boolean;
@@ -62,6 +66,7 @@ export function Sidebar({
   onRename: (path: string, name: string) => Promise<void>;
   onDelete: (node: { path: string; name: string; isDir: boolean }) => void;
   onOpenSettings: () => void;
+  onToggleBookmark: (path: string) => void;
   onRetry: () => void;
   onPrivacy: () => void;
 }) {
@@ -119,6 +124,13 @@ export function Sidebar({
 
   const query = search.trim().toLowerCase();
   const flat = query ? flatten(tree).filter((n) => n.rel.toLowerCase().includes(query)) : [];
+  const bookmarkedNotes = useMemo(() => {
+    const known = new Set(flatten(tree).map((node) => node.path));
+    return bookmarks
+      .filter((path) => known.has(path))
+      .map((path) => findNode(tree, path))
+      .filter((node): node is TreeNode => !!node);
+  }, [bookmarks, tree]);
 
   return (
     <aside className="sidebar">
@@ -200,6 +212,24 @@ export function Sidebar({
           )
         ) : (
           <>
+            {bookmarkedNotes.length > 0 && (
+              <div className="bookmark-section">
+                <p className="sidebar-section-label">
+                  <BookmarkSimple size={12} /> Bookmarks
+                </p>
+                {bookmarkedNotes.map((node) => (
+                  <button
+                    key={node.path}
+                    type="button"
+                    className={node.path === currentPath ? "tree-row current" : "tree-row"}
+                    onClick={() => onOpen(node.path)}
+                  >
+                    <BookmarkSimple size={14} weight="fill" />
+                    <span>{labelOf(node.name, node.isDir)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {editing && editing.kind !== "rename" && editing.dir === vaultPath && (
               <EditRow
                 depth={0}
@@ -291,6 +321,18 @@ export function Sidebar({
                 New folder
               </button>
             </>
+          )}
+          {menu.name && !menu.isDir && (
+            <button
+              type="button"
+              onClick={() => {
+                onToggleBookmark(menu.path);
+                setMenu(null);
+              }}
+            >
+              <BookmarkSimple size={14} />
+              {bookmarks.includes(menu.path) ? "Remove bookmark" : "Bookmark"}
+            </button>
           )}
           {menu.name && (
             <>
@@ -543,6 +585,15 @@ function flatten(nodes: TreeNode[], into: { path: string; rel: string }[] = [], 
     else into.push({ path: node.path, rel });
   }
   return into;
+}
+
+function findNode(nodes: TreeNode[], path: string): TreeNode | undefined {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    const found = findNode(node.children, path);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 function shortPath(path: string) {
